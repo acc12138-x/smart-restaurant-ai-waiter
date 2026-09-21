@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% set active = 'home' %}
+{% block content %}
+
+<!-- ========== 首页 · 视频 Hero ========== -->
+<section class="hero-video" id="heroVideo">
+  <div class="hero-pin">
+
+    <video
+      class="hero-media"
+      id="heroMedia"
+      src="/static/video/hero.mp4"
+      muted
+      loop
+      playsinline
+      webkit-playsinline
+      preload="auto"
+      poster="/static/frames/f001.jpg"
+    ></video>
+
+    <div class="hero-shade"></div>
+
+    <a class="hero-brand" href="/">同盛祥</a>
+    <div class="hero-actions">
+      <a class="hero-btn" href="/menu">菜单</a>
+      <a class="hero-btn" href="/location">门店</a>
+    </div>
+
+    <div class="hero-title">
+      <h1><span>一碗汤</span><span>三十年</span></h1>
+      <p>同盛祥 · 西安老味道</p>
+    </div>
+
+    <div class="hero-cue"><span></span></div>
+
+  </div>
+</section>
+
+<!-- ========== 品牌故事 ========== -->
+<section class="block story">
+  <p class="block-label">老 店</p>
+  <h2 class="block-title">汤还是那口老汤<br>馍还是要自己掰</h2>
+  <p class="block-text">
+    1994 年，同盛祥在西安老巷子里支起第一口汤锅。三十年过去，汤没变，馍没变。
+    我们把店里翻新了一遍，换了暖灯和木桌，只是想让年轻人也愿意坐下来，慢慢掰完一碗馍。
+  </p>
+</section>
+
+<!-- ========== 三个亮点 ========== -->
+<section class="block facts">
+  <div class="fact">
+    <span class="fact-num">30</span>
+    <span class="fact-label">年老汤</span>
+  </div>
+  <div class="fact">
+    <span class="fact-num">02:00</span>
+    <span class="fact-label">深夜营业</span>
+  </div>
+  <div class="fact">
+    <span class="fact-num">28</span>
+    <span class="fact-label">味香料</span>
+  </div>
+</section>
+
+<!-- ========== 入口 ========== -->
+<section class="block entry">
+  <a class="entry-card" href="/menu">
+    <span class="entry-name">看看菜单</span>
+    <span class="entry-arrow">→</span>
+  </a>
+  <a class="entry-card" href="/location">
+    <span class="entry-name">怎么找到我们</span>
+    <span class="entry-arrow">→</span>
+  </a>
+</section>
+
+{% endblock %}

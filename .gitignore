@@ -1,0 +1,52 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+venv/
+venv312/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 数据库（本地数据，不进版本控制）
+data/app.db
+data/app.db-shm
+data/app.db-wal
+data/*.json.tmp
+data/backup/
+data/*.bak*
+
+# 向量库（运行时生成）
+vector_store/*
+!vector_store/.gitkeep
+
+# 日志
+logs/*.log
+logs/*.log.*
+
+# 备份/临时文件
+*.bak
+*.bak_*
+*.bak-*
+_*.py
+
+# 大文件（交付物，不进 git）
+*.pptx
+*.mp4
+*.pdf
+*.docx
+*.xlsx
+
+# OS
+.DS_Store
+Thumbs.db
+*.bak[0-9]
+*.bak[0-9]

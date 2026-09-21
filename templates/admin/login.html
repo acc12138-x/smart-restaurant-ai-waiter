@@ -1,0 +1,37 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>登录 · 同盛祥后台</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body class="login-body">
+  <form id="loginForm" class="login-card">
+    <h1>同盛祥 · 后台</h1>
+    <label>用户名<input name="username" autocomplete="username" required></label>
+    <label>密码<input name="password" type="password" autocomplete="current-password" required></label>
+    <button type="submit">登录</button>
+    <p id="loginMsg" class="login-msg"></p>
+  </form>
+  <script>
+    document.getElementById('loginForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const msg = document.getElementById('loginMsg');
+      msg.textContent = '登录中…';
+      const r = await fetch('/admin/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: f.username.value, password: f.password.value}),
+      });
+      const d = await r.json();
+      if (d.code === 0) {
+        location.href = '/admin/dashboard';
+      } else {
+        msg.textContent = d.msg || '登录失败';
+      }
+    };
+  </script>
+</body>
+</html>

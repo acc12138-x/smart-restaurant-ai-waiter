@@ -1,0 +1,351 @@
+{% extends "admin/base.html" %}
+{% set active = 'kb' %}
+{% block page_title %}知识库管理{% endblock %}
+{% block content %}
+
+<div class="section-block">
+  <h2 class="block-h2">RAG 评估</h2>
+  <div id="ragStats" class="stat-grid"></div>
+</div>
+
+<div class="section-block">
+  <h2 class="block-h2">未命中问题 Top 10</h2>
+  <div id="missList" class="miss-list"></div>
+</div>
+
+<div class="section-block">
+  <div class="kb-head">
+    <h2 class="block-h2" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">知识库文件</h2>
+    <button id="kbAddBtn" class="btn-blue">＋ 新建文件</button>
+  </div>
+  <div id="kbFiles" class="kb-files"></div>
+</div>
+
+<div class="section-block" id="kbEditor" style="display:none;">
+  <div class="editor-head">
+    <span id="kbEditorName" class="editor-name"></span>
+    <div>
+      <button id="kbSave" class="btn-blue">保存并重建</button>
+      <button id="kbHistoryBtn" class="btn-outline">历史版本</button>
+      <button id="kbCancel" class="btn-outline">关闭</button>
+    </div>
+  </div>
+  <textarea id="kbContent" class="kb-textarea" rows="18"></textarea>
+</div>
+
+<div class="modal" id="newFileModal">
+  <div class="modal-panel" style="width:min(440px,92vw);">
+    <div class="modal-head">
+      <h3>新建知识库文件</h3>
+      <button class="modal-close" onclick="closeNewFileModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="nf-label">文件名（必须以 .md 或 .txt 结尾）</label>
+      <input type="text" id="nfName" class="nf-input" placeholder="例如：常见问题.md" maxlength="60">
+      <p class="nf-tip">创建后会立即打开编辑器，可以开始写内容。</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-outline" onclick="closeNewFileModal()">取消</button>
+      <button class="btn-blue" id="nfConfirm">创建</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="historyModal">
+  <div class="modal-panel" style="width:min(820px,96vw);max-height:88vh;">
+    <div class="modal-head">
+      <h3>版本历史 · <span id="hmFilename"></span></h3>
+      <button class="modal-close" onclick="closeHistoryModal()">×</button>
+    </div>
+    <div class="modal-body" style="padding:16px 22px;">
+      <div class="hm-tip">点击任意版本行可展开查看完整内容，确认后点「回滚」。</div>
+      <div id="hmList" class="version-list">
+        <p class="muted">加载中…</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block script %}
+<script>
+var KB_TOKEN = 'admin-token-dev';
+function kbHeaders() {
+  return { 'X-Admin-Token': KB_TOKEN, 'Content-Type': 'application/json' };
+}
+var currentEditingFile = null;
+
+fetch('/api/admin/rag_stats', { headers: kbHeaders() })
+  .then(function(r){ return r.json(); })
+  .then(function(res){
+    var box = document.getElementById('ragStats');
+    if (res.code !== 0) { box.innerHTML = '<p class="muted">加载失败</p>'; return; }
+    var d = res.data;
+    box.innerHTML =
+      '<div class="stat-card"><div class="stat-label">总查询</div><div class="stat-num">' + d.total + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">命中率</div><div class="stat-num">' + d.hit_rate + '%</div></div>' +
+      '<div class="stat-card"><div class="stat-label">今日查询</div><div class="stat-num">' + d.today.total + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">平均延迟</div><div class="stat-num">' + d.avg_elapsed_ms + '<span class="unit">ms</span></div></div>';
+    document.getElementById('missList').innerHTML =
+      (d.miss_questions || []).map(function(x){
+        return '<div class="miss-row"><span>' + x.q + '</span><b>' + x.count + '</b></div>';
+      }).join('') || '<p class="muted">暂无未命中</p>';
+  });
+
+function loadKbFiles() {
+  fetch('/api/admin/kb_files', { headers: kbHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (res.code !== 0) return;
+      var box = document.getElementById('kbFiles');
+      if (!res.data.length) {
+        box.innerHTML = '<p class="muted">暂无文件，点右上角"＋ 新建文件"</p>';
+        return;
+      }
+      box.innerHTML = res.data.map(function(f){
+        return '<div class="kb-file-row">' +
+          '<span class="kb-file-name" data-name="' + f.name + '">' + f.name + '</span>' +
+          '<span class="kb-file-size">' + (f.size/1024).toFixed(1) + ' KB</span>' +
+          '<button class="kb-del-btn" data-name="' + f.name + '" title="删除">✕</button>' +
+        '</div>';
+      }).join('');
+      box.querySelectorAll('.kb-file-name').forEach(function(el){
+        el.onclick = function(){ openKbFile(el.dataset.name); };
+      });
+      box.querySelectorAll('.kb-del-btn').forEach(function(btn){
+        btn.onclick = function(e){
+          e.stopPropagation();
+          deleteKbFile(btn.dataset.name);
+        };
+      });
+    });
+}
+loadKbFiles();
+
+function openKbFile(name) {
+  fetch('/api/admin/kb_file?name=' + encodeURIComponent(name), { headers: kbHeaders() })
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (res.code !== 0) { alert('打开失败'); return; }
+      currentEditingFile = res.data.name;
+      document.getElementById('kbEditor').style.display = '';
+      document.getElementById('kbEditorName').textContent = res.data.name;
+      document.getElementById('kbContent').value = res.data.content;
+      document.getElementById('kbEditor').scrollIntoView({behavior:'smooth', block:'start'});
+    });
+}
+
+document.getElementById('kbSave').onclick = function(){
+  if (!currentEditingFile) return;
+  var name = currentEditingFile;
+  var content = document.getElementById('kbContent').value;
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = '保存中…';
+  fetch('/api/admin/kb_file', {
+    method: 'POST',
+    headers: kbHeaders(),
+    body: JSON.stringify({ name: name, content: content }),
+  }).then(function(r){ return r.json(); }).then(function(res){
+    btn.disabled = false;
+    btn.textContent = '保存并重建';
+    alert(res.msg || '完成');
+    loadKbFiles();
+  }).catch(function(){
+    btn.disabled = false;
+    btn.textContent = '保存并重建';
+    alert('网络错误');
+  });
+};
+
+document.getElementById('kbCancel').onclick = function(){
+  document.getElementById('kbEditor').style.display = 'none';
+  currentEditingFile = null;
+};
+
+function deleteKbFile(name) {
+  if (!confirm('确定删除「' + name + '」？\n删除后会自动重建向量库。')) return;
+  fetch('/api/admin/kb_file?name=' + encodeURIComponent(name), {
+    method: 'DELETE',
+    headers: kbHeaders(),
+  }).then(function(r){ return r.json(); }).then(function(res){
+    if (res.code === 0) {
+      if (currentEditingFile === name) {
+        document.getElementById('kbEditor').style.display = 'none';
+        currentEditingFile = null;
+      }
+      loadKbFiles();
+    } else {
+      alert(res.msg || '删除失败');
+    }
+  });
+}
+
+document.getElementById('kbAddBtn').onclick = function(){
+  var inp = document.getElementById('nfName');
+  inp.value = '';
+  document.getElementById('newFileModal').classList.add('show');
+  setTimeout(function(){ inp.focus(); }, 100);
+};
+
+function closeNewFileModal() {
+  document.getElementById('newFileModal').classList.remove('show');
+}
+
+document.getElementById('newFileModal').onclick = function(e){
+  if (e.target.id === 'newFileModal') closeNewFileModal();
+};
+
+document.getElementById('nfName').addEventListener('keydown', function(e){
+  if (e.key === 'Enter') document.getElementById('nfConfirm').click();
+});
+
+document.getElementById('nfConfirm').onclick = function(){
+  var name = document.getElementById('nfName').value.trim();
+  if (!name) { alert('请输入文件名'); return; }
+  if (!/\.(md|txt)$/i.test(name)) { alert('文件名必须以 .md 或 .txt 结尾'); return; }
+  if (name.indexOf('/') >= 0 || name.indexOf('\\') >= 0) {
+    alert('文件名不能包含 / 或 \\'); return;
+  }
+  var initial = '# ' + name.replace(/\.(md|txt)$/i, '') + '\n\n';
+  fetch('/api/admin/kb_file', {
+    method: 'POST',
+    headers: kbHeaders(),
+    body: JSON.stringify({ name: name, content: initial }),
+  }).then(function(r){ return r.json(); }).then(function(res){
+    if (res.code === 0) {
+      closeNewFileModal();
+      loadKbFiles();
+      setTimeout(function(){ openKbFile(name); }, 300);
+    } else {
+      alert(res.msg || '创建失败');
+    }
+  }).catch(function(){ alert('网络错误'); });
+};
+
+// ---------- 版本历史 ----------
+document.getElementById('kbHistoryBtn').onclick = function(){
+  if (!currentEditingFile) return;
+  showHistory(currentEditingFile);
+};
+
+function showHistory(filename) {
+  document.getElementById('hmFilename').textContent = filename;
+  document.getElementById('hmList').innerHTML = '<p class="muted">加载中…</p>';
+  document.getElementById('historyModal').classList.add('show');
+
+  fetch('/admin/api/kb/versions?filename=' + encodeURIComponent(filename) + '&page_size=50')
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (res.code !== 0) {
+        document.getElementById('hmList').innerHTML = '<p class="muted">加载失败</p>';
+        return;
+      }
+      var items = res.data.items || [];
+      if (!items.length) {
+        document.getElementById('hmList').innerHTML =
+          '<p class="muted">暂无历史版本（首次保存后才有）</p>';
+        return;
+      }
+      document.getElementById('hmList').innerHTML = items.map(function(v, idx){
+        return '<div class="ver-item" data-vid="' + v.id + '" data-ver="' + v.version + '">' +
+          '<div class="ver-row js-toggle">' +
+            '<div class="ver-badge">v' + v.version + '</div>' +
+            '<div class="ver-body">' +
+              '<div class="ver-time">' + (v.created_at || '—') +
+                '<span class="ver-size"> · ' + v.size + ' 字符</span></div>' +
+              '<div class="ver-preview">' + escapeHtml(v.preview || '') + '…</div>' +
+            '</div>' +
+            '<div class="ver-actions">' +
+              '<span class="ver-toggle-hint">展开 ▾</span>' +
+              '<button class="btn-mini js-rollback" data-vid="' + v.id + '" data-ver="' + v.version + '">回滚</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="ver-full" style="display:none;">' +
+            '<pre class="ver-full-content" data-loaded="0">加载中…</pre>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      // 展开 / 折叠
+      document.querySelectorAll('.js-toggle').forEach(function(row){
+        row.onclick = function(e){
+          if (e.target.closest('.js-rollback')) return;
+          var item = row.closest('.ver-item');
+          var full = item.querySelector('.ver-full');
+          var pre = full.querySelector('.ver-full-content');
+          var hint = row.querySelector('.ver-toggle-hint');
+          var expanded = full.style.display !== 'none';
+
+          if (expanded) {
+            full.style.display = 'none';
+            hint.textContent = '展开 ▾';
+            return;
+          }
+
+          // 首次展开才加载内容
+          if (pre.dataset.loaded === '0') {
+            var vid = item.dataset.vid;
+            fetch('/admin/api/kb/versions/' + vid)
+              .then(function(r){ return r.json(); })
+              .then(function(d){
+                if (d.code === 0) {
+                  pre.textContent = d.data.content || '(空)';
+                  pre.dataset.loaded = '1';
+                } else {
+                  pre.textContent = '加载失败';
+                }
+              });
+          }
+          full.style.display = 'block';
+          hint.textContent = '收起 ▴';
+        };
+      });
+
+      // 回滚
+      document.querySelectorAll('.js-rollback').forEach(function(btn){
+        btn.onclick = function(e){
+          e.stopPropagation();
+          var vid = parseInt(btn.dataset.vid, 10);
+          var ver = btn.dataset.ver;
+          if (!confirm('确认回滚到 v' + ver + '？\n当前内容会作为新版本保存。')) return;
+          btn.disabled = true;
+          btn.textContent = '回滚中…';
+          fetch('/admin/api/kb/rollback/' + vid, {method: 'POST'})
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+              btn.disabled = false;
+              btn.textContent = '回滚';
+              if (d.code === 0) {
+                alert(d.msg || '已回滚');
+                closeHistoryModal();
+                loadKbFiles();
+                if (currentEditingFile === filename) openKbFile(filename);
+              } else {
+                alert(d.msg || '回滚失败');
+              }
+            }).catch(function(){
+              btn.disabled = false;
+              btn.textContent = '回滚';
+              alert('网络错误');
+            });
+        };
+      });
+    });
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').classList.remove('show');
+}
+
+document.getElementById('historyModal').onclick = function(e){
+  if (e.target.id === 'historyModal') closeHistoryModal();
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+</script>
+{% endblock %}

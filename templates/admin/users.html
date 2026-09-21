@@ -1,0 +1,214 @@
+{% extends "admin/base.html" %}
+{% set active = 'users' %}
+{% block page_title %}用户管理{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+  <div class="filter-group">
+    <input type="text" id="fKeyword" placeholder="搜用户名 / 昵称 / UID" style="width:240px;">
+  </div>
+  <button id="btnSearch" class="btn-blue">搜索</button>
+  <span id="totalCount" class="total-count"></span>
+</div>
+
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>UID</th><th>用户名</th><th>昵称</th>
+        <th>积分</th><th>等级</th><th>状态</th>
+        <th>注册时间</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="usersBody">
+      <tr><td colspan="8" class="loading-cell">加载中…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="pager" id="pager"></div>
+
+<div class="modal" id="pointsModal">
+  <div class="modal-panel" style="width:min(420px,92vw);">
+    <div class="modal-head">
+      <h3>调整积分</h3>
+      <button class="modal-close" onclick="closePointsModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="detail-row"><label>用户</label><span id="pmUser"></span></div>
+      <div class="detail-row"><label>当前积分</label><span id="pmCurrent"></span></div>
+      <label class="nf-label" style="margin-top:12px;">变动数量（正数增加 / 负数扣减）</label>
+      <input type="number" id="pmDelta" class="nf-input" placeholder="例如 50 或 -20">
+      <label class="nf-label" style="margin-top:12px;">原因</label>
+      <input type="text" id="pmReason" class="nf-input" placeholder="例如：活动补偿" maxlength="50">
+    </div>
+    <div class="modal-foot">
+      <button class="btn-outline" onclick="closePointsModal()">取消</button>
+      <button class="btn-blue" id="pmConfirm">确认调整</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block script %}
+<script>
+var currentPage = 1;
+var currentUid = null;
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+async function loadUsers(page) {
+  page = page || 1;
+  currentPage = page;
+  var kw = document.getElementById('fKeyword').value.trim();
+  var params = new URLSearchParams({page: page, page_size: 20});
+  if (kw) params.set('keyword', kw);
+
+  var body = document.getElementById('usersBody');
+  body.innerHTML = '<tr><td colspan="8" class="loading-cell">加载中…</td></tr>';
+
+  var r = await fetch('/admin/api/users?' + params);
+  var d = await r.json();
+  if (d.code !== 0) {
+    body.innerHTML = '<tr><td colspan="8" class="loading-cell">加载失败</td></tr>';
+    return;
+  }
+  var data = d.data;
+  document.getElementById('totalCount').textContent = '共 ' + data.total + ' 位用户';
+
+  if (!data.items.length) {
+    body.innerHTML = '<tr><td colspan="8" class="loading-cell">暂无用户</td></tr>';
+    renderPager(data);
+    return;
+  }
+
+  body.innerHTML = data.items.map(function(u) {
+    var uid = u.uid || '';
+    var uname = u.username || '-';
+    var nick = u.nickname || '-';
+    var pts = u.points || 0;
+    var lvl = u.level || '新客';
+    var st = u.disabled
+      ? '<span class="badge badge-cancelled">已禁用</span>'
+      : '<span class="badge badge-done">正常</span>';
+    var t = (u.created_at || '').slice(0, 16);
+    var nextDisabled = u.disabled ? 0 : 1;
+    var btnLabel = u.disabled ? '启用' : '禁用';
+    return '<tr>' +
+      '<td class="mono">' + esc(uid.slice(0, 8)) + '…</td>' +
+      '<td><b>' + esc(uname) + '</b></td>' +
+      '<td>' + esc(nick) + '</td>' +
+      '<td class="num">' + pts + '</td>' +
+      '<td><span class="badge badge-level">' + esc(lvl) + '</span></td>' +
+      '<td>' + st + '</td>' +
+      '<td class="small">' + esc(t) + '</td>' +
+      '<td>' +
+        '<button class="btn-mini js-edit-points"' +
+          ' data-uid="' + esc(uid) + '"' +
+          ' data-uname="' + esc(uname) + '"' +
+          ' data-points="' + pts + '">改积分</button>' +
+        '<button class="btn-mini ghost js-toggle-disabled"' +
+          ' data-uid="' + esc(uid) + '"' +
+          ' data-disabled="' + nextDisabled + '">' + btnLabel + '</button>' +
+      '</td></tr>';
+  }).join('');
+
+  // 绑定事件（dataset 传参，无转义问题）
+  body.querySelectorAll('.js-edit-points').forEach(function(btn) {
+    btn.onclick = function() {
+      openPoints(btn.dataset.uid, btn.dataset.uname, parseInt(btn.dataset.points, 10));
+    };
+  });
+  body.querySelectorAll('.js-toggle-disabled').forEach(function(btn) {
+    btn.onclick = function() {
+      toggleDisabled(btn.dataset.uid, parseInt(btn.dataset.disabled, 10));
+    };
+  });
+
+  renderPager(data);
+}
+
+function renderPager(data) {
+  var p = document.getElementById('pager');
+  if (data.pages <= 1) { p.innerHTML = ''; return; }
+  p.innerHTML =
+    '<button ' + (data.page <= 1 ? 'disabled' : '') + ' onclick="loadUsers(' + (data.page - 1) + ')">上一页</button>' +
+    '<span>' + data.page + ' / ' + data.pages + '</span>' +
+    '<button ' + (data.page >= data.pages ? 'disabled' : '') + ' onclick="loadUsers(' + (data.page + 1) + ')">下一页</button>';
+}
+
+function openPoints(uid, username, current) {
+  currentUid = uid;
+  document.getElementById('pmUser').textContent = username || uid.slice(0, 8);
+  document.getElementById('pmCurrent').textContent = current;
+  document.getElementById('pmDelta').value = '';
+  document.getElementById('pmReason').value = '';
+  document.getElementById('pointsModal').classList.add('show');
+  setTimeout(function(){ document.getElementById('pmDelta').focus(); }, 100);
+}
+
+function closePointsModal() {
+  document.getElementById('pointsModal').classList.remove('show');
+  currentUid = null;
+}
+
+document.getElementById('pointsModal').onclick = function(e) {
+  if (e.target.id === 'pointsModal') closePointsModal();
+};
+
+document.getElementById('pmConfirm').onclick = async function() {
+  if (!currentUid) return;
+  var delta = parseInt(document.getElementById('pmDelta').value, 10);
+  var reason = document.getElementById('pmReason').value.trim() || '后台调整';
+  if (!delta || isNaN(delta)) { alert('请输入非零整数'); return; }
+
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+
+  try {
+    var r = await fetch('/admin/api/users/' + currentUid + '/points', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({delta: delta, reason: reason}),
+    });
+    var d = await r.json();
+    if (d.code === 0) {
+      closePointsModal();
+      loadUsers(currentPage);
+    } else {
+      alert(d.msg || '调整失败');
+    }
+  } catch (e) {
+    alert('网络错误');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '确认调整';
+  }
+};
+
+async function toggleDisabled(uid, disabled) {
+  var action = disabled ? '禁用' : '启用';
+  if (!confirm('确认' + action + '该用户？')) return;
+  var r = await fetch('/admin/api/users/' + uid + '/disabled', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({disabled: !!disabled}),
+  });
+  var d = await r.json();
+  if (d.code === 0) loadUsers(currentPage);
+  else alert(d.msg || '操作失败');
+}
+
+document.getElementById('btnSearch').onclick = function() { loadUsers(1); };
+document.getElementById('fKeyword').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') loadUsers(1);
+});
+
+loadUsers(1);
+</script>
+{% endblock %}

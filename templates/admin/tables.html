@@ -1,0 +1,176 @@
+{% extends "admin/base.html" %}
+{% set active = 'tables' %}
+{% block page_title %}桌码管理{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+  <input type="text" id="newTableNo" placeholder="桌号，如 05、A03"
+         maxlength="10" class="nf-input" style="width:160px;">
+  <button id="btnAdd" class="btn-blue">＋ 生成桌码</button>
+  <span id="totalCount" class="total-count"></span>
+</div>
+
+<div class="qr-tip">
+  <div style="margin-bottom:8px;">
+    <b>扫码地址前缀</b>（二维码里编码的域名，必须手机能访问）：
+  </div>
+  <div style="display:flex;gap:8px;">
+    <input type="text" id="qrBase" class="nf-input" style="flex:1;"
+           placeholder="如 http://192.168.0.108:5000 或 https://xxxx.cpolar.cn">
+    <button id="btnSaveBase" class="btn-blue">保存并刷新二维码</button>
+  </div>
+  <div style="margin-top:8px;font-size:11px;color:#92400E;">
+    本机 IP 用 <code>ipconfig</code> 查看；公网地址用 <code>cpolar http 5000</code> 生成。
+  </div>
+</div>
+
+<div class="qr-grid" id="qrGrid">
+  <div class="loading-cell">加载中…</div>
+</div>
+
+<div class="modal" id="qrModal">
+  <div class="modal-panel" style="width:min(480px,94vw);">
+    <div class="modal-head">
+      <h3>桌码 · <span id="qmTableNo"></span></h3>
+      <button class="modal-close" onclick="closeQrModal()">×</button>
+    </div>
+    <div class="modal-body" style="text-align:center;">
+      <img id="qmImg" src="" alt="qrcode"
+           style="max-width:280px;width:100%;border-radius:12px;">
+      <p class="qr-url" id="qmUrl"></p>
+      <p class="qr-hint">长按 / 右键保存，或点下方按钮下载</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-outline" onclick="closeQrModal()">关闭</button>
+      <a id="qmDownload" class="btn-blue" download
+         style="text-decoration:none;display:inline-block;padding:10px 22px;">下载 PNG</a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block script %}
+<script>
+var BASE_KEY = 'tsx-qr-base';
+
+function getBase() {
+  return localStorage.getItem(BASE_KEY) || location.origin;
+}
+
+function setBase(v) {
+  v = (v || '').trim().replace(/\/$/, '');
+  if (v) localStorage.setItem(BASE_KEY, v);
+  else localStorage.removeItem(BASE_KEY);
+}
+
+function qrUrl(tableNo, forDownload) {
+  var base = getBase();
+  var url = '/admin/api/tables/' + encodeURIComponent(tableNo) + '/qrcode.png';
+  var q = '?base=' + encodeURIComponent(base);
+  if (!forDownload) q += '&t=' + Date.now();
+  return url + q;
+}
+
+async function loadTables() {
+  var r = await fetch('/admin/api/tables');
+  var d = await r.json();
+  var box = document.getElementById('qrGrid');
+  if (d.code !== 0) { box.innerHTML = '<div class="loading-cell">加载失败</div>'; return; }
+
+  var list = d.data || [];
+  document.getElementById('totalCount').textContent = '共 ' + list.length + ' 个桌码';
+
+  if (!list.length) {
+    box.innerHTML = '<div class="loading-cell">暂无桌码，在上面输入桌号创建</div>';
+    return;
+  }
+
+  box.innerHTML = list.map(function(t) {
+    return '<div class="qr-card">' +
+      '<div class="qr-thumb">' +
+        '<img src="' + qrUrl(t.table_no, false) + '">' +
+      '</div>' +
+      '<div class="qr-info">' +
+        '<div class="qr-no">' + t.table_no + '</div>' +
+        '<div class="qr-meta">扫码 ' + (t.scan_count || 0) + ' 次</div>' +
+        '<div class="qr-actions">' +
+          '<button class="btn-mini js-show-qr" data-no="' + t.table_no + '">查看 / 下载</button>' +
+          '<button class="btn-mini ghost js-del-table" data-id="' + t.id + '" data-no="' + t.table_no + '">删除</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  box.querySelectorAll('.js-show-qr').forEach(function(b) {
+    b.onclick = function() { showQr(b.dataset.no); };
+  });
+  box.querySelectorAll('.js-del-table').forEach(function(b) {
+    b.onclick = function() { delTable(parseInt(b.dataset.id, 10), b.dataset.no); };
+  });
+}
+
+document.getElementById('btnAdd').onclick = async function() {
+  var inp = document.getElementById('newTableNo');
+  var no = inp.value.trim();
+  if (!no) { alert('请输入桌号'); return; }
+  var r = await fetch('/admin/api/tables', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({table_no: no}),
+  });
+  var d = await r.json();
+  if (d.code === 0) {
+    inp.value = '';
+    loadTables();
+    setTimeout(function() { showQr(no); }, 300);
+  } else {
+    alert(d.msg || '创建失败');
+  }
+};
+
+document.getElementById('newTableNo').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('btnAdd').click();
+});
+
+document.getElementById('btnSaveBase').onclick = function() {
+  var v = document.getElementById('qrBase').value.trim();
+  if (!v) { alert('请输入扫码地址前缀'); return; }
+  if (!/^https?:\/\//i.test(v)) { alert('必须以 http:// 或 https:// 开头'); return; }
+  setBase(v);
+  loadTables();
+  alert('已保存，二维码已刷新为：' + v);
+};
+
+document.getElementById('qrBase').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('btnSaveBase').click();
+});
+
+async function delTable(id, tableNo) {
+  if (!confirm('确定删除桌码 ' + tableNo + ' ？')) return;
+  var r = await fetch('/admin/api/tables/' + id, {method: 'DELETE'});
+  var d = await r.json();
+  if (d.code === 0) loadTables();
+  else alert(d.msg || '删除失败');
+}
+
+function showQr(tableNo) {
+  var url = getBase().replace(/\/$/, '') + '/?table=' + encodeURIComponent(tableNo);
+  document.getElementById('qmTableNo').textContent = tableNo;
+  document.getElementById('qmImg').src = qrUrl(tableNo, false);
+  document.getElementById('qmUrl').textContent = url;
+  document.getElementById('qmDownload').href = qrUrl(tableNo, true);
+  document.getElementById('qrModal').classList.add('show');
+}
+
+function closeQrModal() {
+  document.getElementById('qrModal').classList.remove('show');
+}
+
+document.getElementById('qrModal').onclick = function(e) {
+  if (e.target.id === 'qrModal') closeQrModal();
+};
+
+document.getElementById('qrBase').value = getBase();
+loadTables();
+</script>
+{% endblock %}

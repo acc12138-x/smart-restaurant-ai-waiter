@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% set active = 'menu' %}
+{% block title %}菜单 · 同盛祥{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1 class="page-title">菜单</h1>
+  <p class="page-sub">选了三十年的这几样</p>
+</header>
+
+<div id="menuList" class="menu-list">
+  <div class="skeleton-list"></div>
+</div>
+
+<!-- 悬浮购物车按钮 -->
+<button id="cartBtn" class="cart-btn" type="button">
+  <span class="cart-icon">🛒</span>
+  <span id="cartCount" class="cart-count">0</span>
+</button>
+
+<!-- 购物车弹窗 -->
+<div id="cartModal" class="cart-modal">
+  <div class="cart-panel">
+    <div class="cart-head">
+      <h3>购物车</h3>
+      <button id="cartClose" type="button">✕</button>
+    </div>
+    <div id="cartItems" class="cart-items">
+      <p class="cart-empty">还没有选择菜品</p>
+    </div>
+    <div class="cart-foot">
+      <span id="cartTotal">合计：0 元</span>
+      <button id="cartCheckout" type="button">下单</button>
+    </div>
+  </div>
+</div>
+<!-- 订单成功弹窗 -->
+<div id="orderSuccessModal" class="cart-modal">
+  <div class="cart-panel">
+    <div class="order-success-content">
+      <div class="os-icon">✅</div>
+      <h3 class="os-title">下单成功</h3>
+      <div id="osOrderId" class="os-order-id"></div>
+      <div id="osItems" class="os-items"></div>
+      <div class="os-total">
+        <span>合计</span>
+        <b id="osTotal"></b>
+      </div>
+      <div class="os-actions">
+        <button id="osCancel" class="os-btn os-btn-danger" type="button">取消订单</button>
+        <button id="osClose" class="os-btn os-btn-ghost" type="button">继续点餐</button>
+        <a id="osProfile" class="os-btn os-btn-primary" href="/profile">查看订单</a>
+      </div>
+      <p id="osLoginTip" class="os-login-tip" style="display:none;">
+        登录后可随时查看订单
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
+
+{% block script %}
+<script>
+// ============ 菜单渲染 ============
+fetch('/api/menu')
+  .then(r => r.json())
+  .then(res => {
+    const box = document.getElementById('menuList');
+    const data = res.data || [];
+    if (!data.length) {
+      box.innerHTML = '<p class="empty">菜单整理中…</p>';
+      return;
+    }
+    box.innerHTML = data.map(cat => `
+      <section class="menu-group">
+        <h2 class="menu-cat">${cat.category}</h2>
+        ${cat.items.map(item => `
+          <article class="dish">
+            <div class="dish-thumb">
+              <span>${item.emoji || '🍜'}</span>
+            </div>
+            <div class="dish-info">
+              <h3 class="dish-name">${item.name}</h3>
+              <p class="dish-desc">${item.desc}</p>
+            </div>
+            <div class="dish-right">
+              <span class="dish-price">${item.price}</span>
+              <button class="dish-add" data-name="${item.name}" data-price="${item.price}" type="button">+</button>
+            </div>
+          </article>
+        `).join('')}
+      </section>
+    `).join('');
+
+    // 绑定「+」按钮
+    box.querySelectorAll('.dish-add').forEach(btn => {
+      btn.addEventListener('click', () => {
+        window.Cart.add(btn.dataset.name, parseFloat(btn.dataset.price));
+      });
+    });
+  })
+  .catch(() => {
+    document.getElementById('menuList').innerHTML = '<p class="empty">加载失败，请刷新重试</p>';
+  });
+</script>
+<script src="/static/js/cart.js"></script>
+{% endblock %}

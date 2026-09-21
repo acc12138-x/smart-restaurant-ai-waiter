@@ -1,0 +1,88 @@
+{% extends "admin/base.html" %}
+{% set active = 'logs' %}
+{% block page_title %}操作日志{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+  <button id="btnRefresh" class="btn-blue">刷新</button>
+  <span id="totalCount" class="total-count"></span>
+</div>
+
+<div class="table-wrap">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>时间</th><th>操作员</th><th>动作</th>
+        <th>目标</th><th>详情</th><th>IP</th>
+      </tr>
+    </thead>
+    <tbody id="logsBody">
+      <tr><td colspan="6" class="loading-cell">加载中…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="pager" id="pager"></div>
+
+{% endblock %}
+{% block script %}
+<script>
+var ACTION_LABEL = {
+  login: '登录',
+  update_order_status: '更新订单状态',
+  adjust_points: '调整积分',
+  disable_user: '禁用用户',
+  enable_user: '启用用户',
+  mark_message_read: '标记留言已读',
+};
+
+var currentPage = 1;
+
+async function loadLogs(page) {
+  page = page || 1;
+  currentPage = page;
+  var body = document.getElementById('logsBody');
+  body.innerHTML = '<tr><td colspan="6" class="loading-cell">加载中…</td></tr>';
+
+  var r = await fetch('/admin/api/logs?page=' + page + '&page_size=30');
+  var d = await r.json();
+  if (d.code !== 0) {
+    body.innerHTML = '<tr><td colspan="6" class="loading-cell">加载失败</td></tr>';
+    return;
+  }
+  var data = d.data;
+  document.getElementById('totalCount').textContent = '共 ' + data.total + ' 条';
+
+  if (!data.items.length) {
+    body.innerHTML = '<tr><td colspan="6" class="loading-cell">暂无日志</td></tr>';
+    return;
+  }
+
+  body.innerHTML = data.items.map(function(lg) {
+    var label = ACTION_LABEL[lg.action] || lg.action || '—';
+    return '<tr>' +
+      '<td class="small">' + (lg.created_at || '—') + '</td>' +
+      '<td><b>' + (lg.admin_name || '—') + '</b></td>' +
+      '<td><span class="badge badge-action">' + label + '</span></td>' +
+      '<td class="mono">' + (lg.target || '—') + '</td>' +
+      '<td class="small">' + (lg.detail || '—') + '</td>' +
+      '<td class="small mono">' + (lg.ip || '—') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  renderPager(data);
+}
+
+function renderPager(data) {
+  var p = document.getElementById('pager');
+  if (data.pages <= 1) { p.innerHTML = ''; return; }
+  p.innerHTML =
+    '<button ' + (data.page <= 1 ? 'disabled' : '') + ' onclick="loadLogs(' + (data.page - 1) + ')">上一页</button>' +
+    '<span>' + data.page + ' / ' + data.pages + '</span>' +
+    '<button ' + (data.page >= data.pages ? 'disabled' : '') + ' onclick="loadLogs(' + (data.page + 1) + ')">下一页</button>';
+}
+
+document.getElementById('btnRefresh').onclick = function() { loadLogs(1); };
+loadLogs(1);
+</script>
+{% endblock %}

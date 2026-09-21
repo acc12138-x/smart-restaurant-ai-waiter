@@ -1,0 +1,47 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}同盛祥 · 后台{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+</head>
+<body>
+<div class="admin-shell">
+  <aside class="admin-side">
+    <div class="admin-brand">同盛祥<span>后台</span></div>
+    <nav class="admin-nav">
+      <a href="/admin/dashboard" class="{% if active=='dashboard' %}on{% endif %}">📊 数据总览</a>
+      <a href="/admin/orders"    class="{% if active=='orders' %}on{% endif %}">🧾 订单管理</a>
+      <a href="/admin/chat-logs" class="{% if active=='chat' %}on{% endif %}">🤖 AI 记录</a>
+      <a href="/admin/users"     class="{% if active=='users' %}on{% endif %}">👤 用户管理</a>
+      <a href="/admin/kb"        class="{% if active=='kb' %}on{% endif %}">📚 知识库</a>
+      <a href="/admin/messages"  class="{% if active=='messages' %}on{% endif %}">💬 留言</a>
+      <a href="/admin/tables"    class="{% if active=='tables' %}on{% endif %}">🔳 桌码</a>
+      <a href="/admin/logs"      class="{% if active=='logs' %}on{% endif %}">📝 操作日志</a>
+      <a href="/admin/settings"  class="{% if active=='settings' %}on{% endif %}">⚙️ 设置</a>
+    </nav>
+    <div class="admin-foot">
+      <span>{{ admin.username if admin else '未登录' }}</span>
+      <button id="logoutBtn">退出</button>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <header class="admin-top">
+      <h1>{% block page_title %}后台{% endblock %}</h1>
+    </header>
+    <div class="admin-body">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+<script>
+document.getElementById('logoutBtn').onclick = async () => {
+  await fetch('/admin/logout', {method:'POST'});
+  location.href = '/admin/login';
+};
+</script>
+{% block script %}{% endblock %}
+</body>
+</html>

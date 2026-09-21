@@ -1,0 +1,94 @@
+{% extends "admin/base.html" %}
+{% set active = 'messages' %}
+{% block page_title %}留言管理{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+  <label class="chk-label">
+    <input type="checkbox" id="fUnread"> 只看未读
+  </label>
+  <button id="btnRefresh" class="btn-blue">刷新</button>
+  <span id="totalCount" class="total-count"></span>
+</div>
+
+<div class="msg-grid" id="msgList">
+  <div class="loading-cell">加载中…</div>
+</div>
+
+<div class="pager" id="pager"></div>
+
+{% endblock %}
+{% block script %}
+<script>
+var currentPage = 1;
+
+async function loadMessages(page) {
+  page = page || 1;
+  currentPage = page;
+  var unread = document.getElementById('fUnread').checked ? '1' : '0';
+  var r = await fetch('/admin/api/messages?page=' + page + '&page_size=20&unread=' + unread);
+  var d = await r.json();
+  var box = document.getElementById('msgList');
+  if (d.code !== 0) { box.innerHTML = '<div class="loading-cell">加载失败</div>'; return; }
+
+  var data = d.data;
+  document.getElementById('totalCount').textContent =
+    '共 ' + data.total + ' 条 · 未读 ' + data.unread_count;
+
+  if (!data.items.length) {
+    box.innerHTML = '<div class="loading-cell">暂无留言</div>';
+    return;
+  }
+
+  box.innerHTML = data.items.map(function(m) {
+    var cls = m.read ? 'is-read' : 'is-unread';
+    var name = m.name || '匿名老客';
+    var time = m.created_at || '—';
+    var content = escapeHtml(m.content || '');
+    var foot = m.read
+      ? '<span class="badge badge-done">已读</span><button class="btn-mini ghost" onclick="markRead(' + m.id + ', false)">标为未读</button>'
+      : '<span class="badge badge-pending">未读</span><button class="btn-mini" onclick="markRead(' + m.id + ', true)">标为已读</button>';
+    return '<div class="msg-card ' + cls + '">' +
+      '<div class="msg-head">' +
+        '<span class="msg-name">' + name + '</span>' +
+        '<span class="msg-time">' + time + '</span>' +
+      '</div>' +
+      '<div class="msg-content">' + content + '</div>' +
+      '<div class="msg-foot">' + foot + '</div>' +
+    '</div>';
+  }).join('');
+
+  renderPager(data);
+}
+
+function renderPager(data) {
+  var p = document.getElementById('pager');
+  if (data.pages <= 1) { p.innerHTML = ''; return; }
+  p.innerHTML =
+    '<button ' + (data.page <= 1 ? 'disabled' : '') + ' onclick="loadMessages(' + (data.page - 1) + ')">上一页</button>' +
+    '<span>' + data.page + ' / ' + data.pages + '</span>' +
+    '<button ' + (data.page >= data.pages ? 'disabled' : '') + ' onclick="loadMessages(' + (data.page + 1) + ')">下一页</button>';
+}
+
+async function markRead(id, read) {
+  var r = await fetch('/admin/api/messages/' + id + '/read', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({read: read}),
+  });
+  var d = await r.json();
+  if (d.code === 0) loadMessages(currentPage);
+  else alert(d.msg || '操作失败');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+document.getElementById('btnRefresh').onclick = function() { loadMessages(1); };
+document.getElementById('fUnread').onchange = function() { loadMessages(1); };
+loadMessages(1);
+</script>
+{% endblock %}

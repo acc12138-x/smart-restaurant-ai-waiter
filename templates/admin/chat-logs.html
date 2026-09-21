@@ -1,0 +1,87 @@
+﻿{% extends "admin/base.html" %}
+{% set active = 'chat' %}
+{% block page_title %}AI 对话记录{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+  <button id="btnRefresh" class="btn-blue">刷新</button>
+  <span id="totalCount" class="total-count"></span>
+</div>
+
+<div class="intent-chips" id="intentChips"></div>
+
+<div class="chatlog-list" id="logList">
+  <div class="loading-cell">加载中…</div>
+</div>
+
+<div class="pager" id="pager"></div>
+
+{% endblock %}
+{% block script %}
+<script>
+let currentPage = 1;
+
+async function loadLogs(page = 1) {
+  currentPage = page;
+  const r = await fetch(`/admin/api/chat-logs?page=${page}&page_size=20`);
+  const d = await r.json();
+  const box = document.getElementById('logList');
+  if (d.code !== 0) {
+    box.innerHTML = '<div class="loading-cell">加载失败</div>';
+    return;
+  }
+  const data = d.data;
+  document.getElementById('totalCount').textContent = `共 ${data.total} 条`;
+
+  const chips = document.getElementById('intentChips');
+  const intents = data.intent_distribution || {};
+  const keys = Object.keys(intents);
+  chips.innerHTML = keys.length
+    ? keys.map(k => `<span class="chip">${k} <b>${intents[k]}</b></span>`).join('')
+    : '<span class="chip ghost">暂无意图分布</span>';
+
+  if (data.items.length === 0) {
+    box.innerHTML = '<div class="loading-cell">暂无记录，新对话会自动记录</div>';
+    return;
+  }
+
+  box.innerHTML = data.items.map(x => `
+    <div class="chatlog-card">
+      <div class="cl-head">
+        <span class="cl-uid">${x.uid || '匿名'}</span>
+        <span class="cl-time">${x.created_at || ''}</span>
+      </div>
+      <div class="cl-q"><b>问</b> ${escapeHtml(x.question || '')}</div>
+      <div class="cl-a"><b>答</b> ${escapeHtml(x.answer || '')}</div>
+      <div class="cl-meta">
+        <span class="badge badge-${x.intent||'other'}">${x.intent || 'other'}</span>
+        <span class="cl-ms">${x.elapsed_ms ? x.elapsed_ms + ' ms' : ''}</span>
+      </div>
+    </div>
+  `).join('');
+
+  renderPager(data);
+}
+
+function renderPager(data) {
+  const p = document.getElementById('pager');
+  if (data.pages <= 1) { p.innerHTML = ''; return; }
+  p.innerHTML = `
+    <button ${data.page<=1?'disabled':''} onclick="loadLogs(${data.page-1})">上一页</button>
+    <span>${data.page} / ${data.pages}</span>
+    <button ${data.page>=data.pages?'disabled':''} onclick="loadLogs(${data.page+1})">下一页</button>`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[c]);
+}
+
+document.getElementById('btnRefresh').onclick = () => loadLogs(1);
+loadLogs(1);
+</script>
+{% endblock %}
+'@ | Out-File -Encoding utf8 templates\admin\chat-logs.html
+
+Write-Host "chat-logs.html 已建" -ForegroundColor Green

@@ -1,0 +1,191 @@
+﻿{% extends "admin/base.html" %}
+{% set active = 'orders' %}
+{% block page_title %}订单管理{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+  <div class="filter-group">
+    <label>状态</label>
+    <select id="fStatus">
+      <option value="">全部</option>
+      <option value="pending">待付款</option>
+      <option value="paid">已付款</option>
+      <option value="cooking">制作中</option>
+      <option value="done">已完成</option>
+      <option value="cancelled">已取消</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>日期</label>
+    <input type="date" id="fDate">
+  </div>
+  <button id="btnRefresh" class="btn-blue">刷新</button>
+  <button id="btnExport" class="btn-outline">导出 CSV</button>
+  <span id="totalCount" class="total-count"></span>
+</div>
+
+<div class="table-wrap">
+  <table class="data-table" id="ordersTable">
+    <thead>
+      <tr>
+        <th>订单号</th>
+        <th>桌号</th>
+        <th>菜品</th>
+        <th>金额</th>
+        <th>状态</th>
+        <th>时间</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="ordersBody">
+      <tr><td colspan="7" class="loading-cell">加载中…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="pager" id="pager"></div>
+
+<div class="modal" id="detailModal">
+  <div class="modal-panel">
+    <div class="modal-head">
+      <h3>订单详情</h3>
+      <button onclick="closeModal()" class="modal-close">×</button>
+    </div>
+    <div id="detailBody" class="modal-body"></div>
+  </div>
+</div>
+
+{% endblock %}
+{% block script %}
+<script>
+const STATUS_LABEL = {
+  pending:   '待付款',
+  paid:      '已付款',
+  cooking:   '制作中',
+  done:      '已完成',
+  cancelled: '已取消',
+};
+const NEXT_STATUS = {
+  pending:   ['paid', 'cancelled'],
+  paid:      ['cooking', 'cancelled'],
+  cooking:   ['done'],
+  done:      [],
+  cancelled: [],
+};
+
+let currentPage = 1;
+
+async function loadOrders(page = 1) {
+  currentPage = page;
+  const status = document.getElementById('fStatus').value;
+  const date = document.getElementById('fDate').value;
+  const params = new URLSearchParams({page, page_size: 20});
+  if (status) params.set('status', status);
+  if (date) params.set('date', date);
+
+  const body = document.getElementById('ordersBody');
+  body.innerHTML = '<tr><td colspan="7" class="loading-cell">加载中…</td></tr>';
+
+  const r = await fetch('/admin/api/orders?' + params.toString());
+  const d = await r.json();
+  if (d.code !== 0) {
+    body.innerHTML = '<tr><td colspan="7" class="loading-cell">加载失败</td></tr>';
+    return;
+  }
+
+  const data = d.data;
+  document.getElementById('totalCount').textContent =
+    `共 ${data.total} 条`;
+
+  if (data.items.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" class="loading-cell">暂无订单</td></tr>';
+    renderPager(data);
+    return;
+  }
+
+  body.innerHTML = data.items.map(o => {
+    const itemsStr = (o.items || []).map(it =>
+      `${it.name}×${it.qty}`).join('，');
+    const nextBtns = (NEXT_STATUS[o.status] || []).map(s =>
+      `<button class="btn-mini" onclick="setStatus('${o.id}','${s}')">${STATUS_LABEL[s]}</button>`
+    ).join('');
+    return `
+      <tr>
+        <td class="mono">${o.id}</td>
+        <td>${o.table_no || '外带'}</td>
+        <td class="ellipsis" title="${itemsStr}">${itemsStr}</td>
+        <td class="num">¥${o.total}</td>
+        <td><span class="badge badge-${o.status}">${STATUS_LABEL[o.status] || o.status}</span></td>
+        <td class="small">${(o.created_at || '').slice(5, 16)}</td>
+        <td>
+          <button class="btn-mini ghost" onclick='showDetail(${JSON.stringify(o).replace(/'/g, "&#39;")})'>详情</button>
+          ${nextBtns}
+        </td>
+      </tr>`;
+  }).join('');
+
+  renderPager(data);
+}
+
+function renderPager(data) {
+  const p = document.getElementById('pager');
+  if (data.pages <= 1) { p.innerHTML = ''; return; }
+  p.innerHTML = `
+    <button ${data.page<=1?'disabled':''} onclick="loadOrders(${data.page-1})">上一页</button>
+    <span>${data.page} / ${data.pages}</span>
+    <button ${data.page>=data.pages?'disabled':''} onclick="loadOrders(${data.page+1})">下一页</button>`;
+}
+
+async function setStatus(orderId, status) {
+  if (!confirm(`确认把订单 ${orderId} 改为「${STATUS_LABEL[status]}」？`)) return;
+  const r = await fetch(`/admin/api/orders/${orderId}/status`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status}),
+  });
+  const d = await r.json();
+  if (d.code === 0) {
+    loadOrders(currentPage);
+  } else {
+    alert(d.msg || '更新失败');
+  }
+}
+
+function showDetail(o) {
+  const itemsRows = (o.items || []).map(it =>
+    `<tr><td>${it.name}</td><td class="num">×${it.qty}</td><td class="num">¥${it.subtotal}</td></tr>`
+  ).join('');
+  document.getElementById('detailBody').innerHTML = `
+    <div class="detail-row"><label>订单号</label><span class="mono">${o.id}</span></div>
+    <div class="detail-row"><label>用户</label><span>${o.uid || '匿名'}</span></div>
+    <div class="detail-row"><label>桌号</label><span>${o.table_no || '外带'}</span></div>
+    <div class="detail-row"><label>状态</label><span class="badge badge-${o.status}">${STATUS_LABEL[o.status] || o.status}</span></div>
+    <div class="detail-row"><label>时间</label><span>${o.created_at || ''}</span></div>
+    <table class="detail-items">
+      <thead><tr><th>菜品</th><th>数量</th><th>小计</th></tr></thead>
+      <tbody>${itemsRows}</tbody>
+    </table>
+    <div class="detail-total">合计：¥${o.total}</div>`;
+  document.getElementById('detailModal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('detailModal').classList.remove('show');
+}
+
+document.getElementById('btnRefresh').onclick = () => loadOrders(1);
+document.getElementById('btnExport').onclick = () => {
+  window.open('/admin/api/orders/export', '_blank');
+};
+document.getElementById('fStatus').onchange = () => loadOrders(1);
+document.getElementById('fDate').onchange = () => loadOrders(1);
+document.getElementById('detailModal').onclick = (e) => {
+  if (e.target.id === 'detailModal') closeModal();
+};
+
+loadOrders(1);
+</script>
+{% endblock %}
+'@ | Out-File -Encoding utf8 templates\admin\orders.html
+
+Write-Host "orders.html 已建" -ForegroundColor Green

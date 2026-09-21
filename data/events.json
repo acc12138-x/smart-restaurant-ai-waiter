@@ -1,0 +1,1339 @@
+[
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:02:11",
+    "id": 1
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/location"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:02:13",
+    "id": 2
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/menu"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:02:15",
+    "id": 3
+  },
+  {
+    "event": "add_to_cart",
+    "payload": {
+      "name": "牛肉泡馍(小份)",
+      "price": 24
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:02:19",
+    "id": 4
+  },
+  {
+    "event": "add_to_cart",
+    "payload": {
+      "name": "牛肉泡馍(大份)",
+      "price": 26
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:02:19",
+    "id": 5
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:02:28",
+    "id": 6
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/menu"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:02:33",
+    "id": 7
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:02:46",
+    "id": 8
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "我的订单"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:02:57",
+    "id": 9
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "我的订单",
+      "intent": "other",
+      "is_order": false,
+      "reply": "抱歉，我这边没有这方面的信息"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:03:14",
+    "id": 10
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:03:17",
+    "id": 11
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:03:25",
+    "id": 12
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "要一份羊肉泡馍"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:03:40",
+    "id": 13
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "要一份羊肉泡馍",
+      "intent": "other",
+      "is_order": false,
+      "reply": "羊肉泡馍(大份)：26 元"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:03:57",
+    "id": 14
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:06:53",
+    "id": 15
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:06:58",
+    "id": 16
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/location"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:06:59",
+    "id": 17
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/menu"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:07:00",
+    "id": 18
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:07:01",
+    "id": 19
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:07:08",
+    "id": 20
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "要一份羊肉泡馍"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:07:09",
+    "id": 21
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "要一份羊肉泡馍",
+      "intent": "place_order",
+      "is_order": true,
+      "reply": "好的，已为您下单（订单号 TSX1789801637700）：\n  · 羊肉泡馍 × 1 = 26."
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:07:17",
+    "id": 22
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/admin"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:08:56",
+    "id": 23
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 07:55:28",
+    "id": 24
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:00:21",
+    "id": 25
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "牛肉泡馍多少钱"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:00:27",
+    "id": 26
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "牛肉泡馍多少钱",
+      "intent": "query_menu",
+      "is_order": false,
+      "reply": "牛肉泡馍(小份)：24 元，牛肉泡馍(大份)：26 元。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:00:53",
+    "id": 27
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "门店故事"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:01:06",
+    "id": 28
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "门店故事",
+      "intent": "query_location",
+      "is_order": false,
+      "reply": "同盛祥西安泡馍老店创立于1994年，是经营30年的西安老字号，2025年完成翻新，保留老汤锅和木梁，"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:01:28",
+    "id": 29
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:10:17",
+    "id": 30
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:10:36",
+    "id": 31
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:10:41",
+    "id": 32
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "牛肉泡馍多少钱"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:10:48",
+    "id": 33
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "牛肉泡馍多少钱",
+      "intent": "query_menu",
+      "is_order": false,
+      "reply": "牛肉泡馍(小份)：24 元，牛肉泡馍(大份)：26 元。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:11:03",
+    "id": 34
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:12:42",
+    "id": 35
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "你好啊"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:12:51",
+    "id": 36
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "你好啊",
+      "intent": "chat",
+      "is_order": false,
+      "reply": "你好！我是同盛祥的小助手，可以问我菜单、营业时间、门店地址，也可以直接点菜。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:13:00",
+    "id": 37
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:20:42",
+    "id": 38
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "嘿"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:20:52",
+    "id": 39
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "嘿",
+      "intent": "chat",
+      "is_order": false,
+      "reply": "你好！我是同盛祥的小助手，可以问我菜单、营业时间、门店地址，也可以直接点菜。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:20:59",
+    "id": 40
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:21:46",
+    "id": 41
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:21:51",
+    "id": 42
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:29:21",
+    "id": 43
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:38:56",
+    "id": 44
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:48:44",
+    "id": 45
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 08:58:26",
+    "id": 46
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:00:55",
+    "id": 47
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:00:57",
+    "id": 48
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:10:03",
+    "id": 49
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:14:41",
+    "id": 50
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:16:47",
+    "id": 51
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:18:31",
+    "id": 52
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:20:08",
+    "id": 53
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:31:51",
+    "id": 54
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "hei"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:32:36",
+    "id": 55
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "hei",
+      "intent": "other",
+      "is_order": false,
+      "reply": "抱歉，我这边没有这方面的信息。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:32:53",
+    "id": 56
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "嘿"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:32:56",
+    "id": 57
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "嘿",
+      "intent": "other",
+      "is_order": false,
+      "reply": "您好，欢迎光临西安同盛祥泡馍老店！"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:33:13",
+    "id": 58
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "羊肉泡馍怎么卖"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:33:19",
+    "id": 59
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "羊肉泡馍怎么卖",
+      "intent": "other",
+      "is_order": false,
+      "reply": "羊肉泡馍：26.0 元，优质羊肉泡馍：32.0 元。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:33:20",
+    "id": 60
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "点一个羊肉泡馍"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:33:35",
+    "id": 61
+  },
+  {
+    "event": "order_created",
+    "payload": {
+      "order_id": "TSX1789810415636",
+      "total": 26
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:33:36",
+    "id": 62
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/menu"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:33:44",
+    "id": 63
+  },
+  {
+    "event": "add_to_cart",
+    "payload": {
+      "name": "牛肉泡馍(小份)",
+      "price": 24
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:33:46",
+    "id": 64
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:33:51",
+    "id": 65
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:40:11",
+    "id": 66
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/menu"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:40:12",
+    "id": 67
+  },
+  {
+    "event": "add_to_cart",
+    "payload": {
+      "name": "牛肉泡馍(大份)",
+      "price": 26
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:40:13",
+    "id": 68
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:40:17",
+    "id": 69
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:40:46",
+    "id": 70
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:40:47",
+    "id": 71
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:40:52",
+    "id": 72
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:40:57",
+    "id": 73
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 09:41:04",
+    "id": 74
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:05:58",
+    "id": 75
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:06:00",
+    "id": 76
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/location"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:06:01",
+    "id": 77
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/menu"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:06:02",
+    "id": 78
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:06:03",
+    "id": 79
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/chat"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:07:42",
+    "id": 80
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "营业到几点"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:07:48",
+    "id": 81
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "营业到几点",
+      "intent": "query_hours",
+      "is_order": false,
+      "reply": "每天营业到次日02:00。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:08:05",
+    "id": 82
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "门店在哪里"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:08:06",
+    "id": 83
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "门店在哪里",
+      "intent": "query_location",
+      "is_order": false,
+      "reply": "同盛祥西安泡馍老店位于西安市碑林区老巷子88号。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:08:25",
+    "id": 84
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "同盛祥什么时候开的"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:08:26",
+    "id": 85
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "同盛祥什么时候开的",
+      "intent": "other",
+      "is_order": false,
+      "reply": "同盛祥西安泡馍老店创立于1994年。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:08:41",
+    "id": 86
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "推荐一个单人套餐"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:08:48",
+    "id": 87
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "推荐一个单人套餐",
+      "intent": "query_menu",
+      "is_order": false,
+      "reply": "抱歉，我这边没有这方面的信息。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:09:02",
+    "id": 88
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/admin/kb"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:09:19",
+    "id": 89
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/admin/kb"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:09:32",
+    "id": 90
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/admin/kb"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:09:41",
+    "id": 91
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/admin/kb"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:15:02",
+    "id": 92
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/admin/kb"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:16:29",
+    "id": 93
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/admin/kb"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:18:49",
+    "id": 94
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "推荐一个单人套餐"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:20:00",
+    "id": 95
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "推荐一个单人套餐",
+      "intent": "query_menu",
+      "is_order": false,
+      "reply": "单人套餐 B：羊肉泡馍 + 糖蒜(整头) = 29 元"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:20:12",
+    "id": 96
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "糖尿病人能吃吗"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:23:30",
+    "id": 97
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "糖尿病人能吃吗",
+      "intent": "other",
+      "is_order": false,
+      "reply": "饮食健康方面，建议糖尿病患者适量食用，注意控制摄入量。可以尝试选择清淡的搭配，比如凉皮或冰峰汽水。 "
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:23:50",
+    "id": 98
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "怎么走过来？我要吃羊肉泡馍"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:41:34",
+    "id": 99
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "怎么走过来？我要吃羊肉泡馍",
+      "intent": "place_order",
+      "is_order": false,
+      "reply": "地铁 2 号线钟楼站 C 口出，步行 300 米就到。也可以导航搜「同盛祥泡馍老店」。"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:41:35",
+    "id": 100
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "怎么过来，羊肉泡馍多少钱"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:41:53",
+    "id": 101
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "怎么过来，羊肉泡馍多少钱",
+      "intent": "query_menu",
+      "is_order": false,
+      "reply": "羊肉泡馍：26.0 元。微辣鲜香，羊肉软烂，开胃过瘾"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:41:54",
+    "id": 102
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "地址在哪，羊肉泡馍多少钱"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:42:04",
+    "id": 103
+  },
+  {
+    "event": "chat_message",
+    "payload": {
+      "message": "地址在哪，羊肉泡馍多少钱",
+      "intent": "query_menu",
+      "is_order": false,
+      "reply": "同盛祥西安泡馍老店在西安市碑林区老巷子 88 号。地铁 2 号线钟楼站 C 口出，步行 300 米就"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 12:42:05",
+    "id": 104
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/location"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 13:17:54",
+    "id": 105
+  },
+  {
+    "event": "page_view",
+    "payload": {
+      "page": "/profile"
+    },
+    "uid": null,
+    "ip": "172.18.0.1",
+    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Sa",
+    "date": "2026-09-19",
+    "time": "2026-09-19 13:18:08",
+    "id": 106
+  }
+]

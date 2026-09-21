@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% block title %}订单跟踪 · 同盛祥{% endblock %}
+{% block content %}
+
+<div class="track-wrap">
+
+{% if not order %}
+  <div class="track-empty">
+    <div class="track-empty-icon">🔍</div>
+    <h2>订单不存在</h2>
+    <p>请确认订单号是否正确：<span class="track-mono">{{ order_id }}</span></p>
+    <a href="/" class="track-btn-ghost">返回首页</a>
+  </div>
+{% else %}
+
+  <div class="track-head">
+    <div class="track-head-label">订单号</div>
+    <div class="track-head-id">{{ order.id }}</div>
+    <div class="track-head-time">{{ order.created_at }}</div>
+  </div>
+
+  {% if order.status == 'cancelled' %}
+    <div class="track-cancelled">
+      <span>❌</span>
+      <div>
+        <b>订单已取消</b>
+        <p>如有疑问请联系店员 029-8888 6666</p>
+      </div>
+    </div>
+  {% else %}
+
+    {% set steps = [
+      {'key': 'pending', 'label': '已下单', 'desc': '订单已提交，等待处理'},
+      {'key': 'paid',    'label': '已付款', 'desc': '付款成功，准备制作'},
+      {'key': 'cooking', 'label': '制作中', 'desc': '师傅正在为您烹制'},
+      {'key': 'done',    'label': '已完成', 'desc': '您的餐已准备好'}
+    ] %}
+    {% set order_status = order.status or 'pending' %}
+    {% set status_rank = {'pending': 0, 'paid': 1, 'cooking': 2, 'done': 3} %}
+    {% set current_rank = status_rank.get(order_status, 0) %}
+
+    <div class="timeline">
+      {% for step in steps %}
+        {% set step_rank = loop.index0 %}
+        {% set state = 'done' if step_rank < current_rank
+                        else ('active' if step_rank == current_rank else 'todo') %}
+        <div class="tl-row tl-{{ state }}">
+          <div class="tl-icon">
+            {% if state == 'done' %}✓
+            {% elif state == 'active' %}●
+            {% else %}○{% endif %}
+          </div>
+          <div class="tl-body">
+            <div class="tl-label">{{ step.label }}</div>
+            <div class="tl-desc">{{ step.desc }}</div>
+          </div>
+        </div>
+        {% if not loop.last %}
+          <div class="tl-line tl-line-{{ 'done' if step_rank < current_rank else 'todo' }}"></div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+  {% endif %}
+
+  <div class="track-block">
+    <h3 class="track-block-title">订单明细</h3>
+    <div class="track-items">
+      {% for it in order['items'] %}
+      <div class="track-item">
+        <span class="ti-name">{{ it.name }}</span>
+        <span class="ti-qty">×{{ it.qty }}</span>
+        <span class="ti-sub">¥{{ it.subtotal }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="track-total">
+      <span>合计</span>
+      <b>¥{{ order.total }}</b>
+    </div>
+  </div>
+
+  <div class="track-block">
+    <h3 class="track-block-title">取餐信息</h3>
+    <div class="track-info">
+      <div class="track-info-row">
+        <span>桌号</span>
+        <b>{{ order.table_no or '外带' }}</b>
+      </div>
+      <div class="track-info-row">
+        <span>联系电话</span>
+        <b>029-8888 6666</b>
+      </div>
+      <div class="track-info-row">
+        <span>门店地址</span>
+        <b>西安市碑林区老巷子 88 号</b>
+      </div>
+    </div>
+  </div>
+
+  {% if order.status == 'pending' %}
+  <div class="track-pay-wrap">
+    <button id="payOrderBtn" class="track-pay-btn"
+            data-order-id="{{ order.id }}" type="button">
+      立即付款 ¥{{ order.total }}
+    </button>
+    <p class="track-pay-hint">付款后每 1 元累积 1 积分</p>
+  </div>
+  {% endif %}
+
+  {% if order.status in ['pending', 'paid'] %}
+  <div class="track-cancel-wrap">
+    <button id="cancelOrderBtn" class="track-cancel-btn"
+            data-order-id="{{ order.id }}"
+            {% if order.uid %}data-requires-login="1"{% endif %}
+            type="button">
+      取消订单
+    </button>
+    <p class="track-cancel-hint">取消后不可恢复</p>
+  </div>
+  {% endif %}
+
+  <div class="track-actions">
+    <a href="/menu" class="track-btn">再点一单</a>
+    <a href="/chat" class="track-btn-ghost">找客服</a>
+  </div>
+
+{% endif %}
+
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script>
+(function(){
+  // 页面打开后，把当前订单状态同步回 localStorage（覆盖本地缓存的旧状态）
+  try {
+    var oid = '{{ order.id }}';
+    var status = '{{ order.status }}';
+    var total = {{ order.total }};
+    var orders = JSON.parse(localStorage.getItem('tsx-orders') || '[]');
+    var idx = -1;
+    for (var i = 0; i < orders.length; i++) {
+      if (orders[i].id === oid) { idx = i; break; }
+    }
+    if (idx >= 0) {
+      orders[idx].status = status;
+      orders[idx].total = total;
+      localStorage.setItem('tsx-orders', JSON.stringify(orders));
+    }
+  } catch(e) {}
+
+  // 立即付款按钮
+  var payBtn = document.getElementById('payOrderBtn');
+  if (payBtn) {
+    payBtn.onclick = async function(){
+      var oid = payBtn.dataset.orderId;
+      var token = localStorage.getItem('tsx-token') || '';
+
+      if (!token) {
+        alert('付款需要先登录哦～');
+        location.href = '/profile?login=1';
+        return;
+      }
+
+      if (!confirm('确认支付 ¥' + '{{ order.total }}' + ' ？\n（演示环境，点击即视为付款成功）')) return;
+      payBtn.disabled = true;
+      payBtn.textContent = '支付中…';
+
+      try {
+        var r = await fetch('/api/order/' + oid + '/pay', {
+          method: 'POST',
+          headers: {'Authorization': 'Bearer ' + token}
+        });
+        var d = await r.json();
+        if (d.code === 0) {
+          try {
+            var orders = JSON.parse(localStorage.getItem('tsx-orders') || '[]');
+            for (var i = 0; i < orders.length; i++) {
+              if (orders[i].id === oid) { orders[i].status = 'paid'; break; }
+            }
+            localStorage.setItem('tsx-orders', JSON.stringify(orders));
+          } catch(e) {}
+          alert('付款成功！积分已到账');
+          location.reload();
+        } else {
+          alert(d.msg || '付款失败');
+          payBtn.disabled = false;
+          payBtn.textContent = '立即付款 ¥' + '{{ order.total }}';
+        }
+      } catch (e) {
+        alert('网络错误');
+        payBtn.disabled = false;
+        payBtn.textContent = '立即付款 ¥' + '{{ order.total }}';
+      }
+    };
+  }
+
+  // 取消订单按钮
+  var btn = document.getElementById('cancelOrderBtn');
+  if (!btn) return;
+  btn.onclick = async function(){
+    var oid = btn.dataset.orderId;
+    var token = localStorage.getItem('tsx-token') || '';
+
+    // 必须登录才能取消
+    if (!token) {
+      alert('取消订单需要先登录哦～');
+      location.href = '/profile?login=1';
+      return;
+    }
+
+    if (!confirm('确定取消订单 ' + oid + '？\n取消后不可恢复。')) return;
+    btn.disabled = true;
+    btn.textContent = '取消中…';
+
+    var headers = {'Content-Type': 'application/json',
+                   'Authorization': 'Bearer ' + token};
+
+    try {
+      var r = await fetch('/api/order/' + oid + '/cancel', {
+        method: 'POST', headers: headers
+      });
+      var d = await r.json();
+      if (d.code === 0) {
+        try {
+          var orders = JSON.parse(localStorage.getItem('tsx-orders') || '[]');
+          for (var i = 0; i < orders.length; i++) {
+            if (orders[i].id === oid) { orders[i].status = 'cancelled'; break; }
+          }
+          localStorage.setItem('tsx-orders', JSON.stringify(orders));
+        } catch(e) {}
+        alert('已取消');
+        location.reload();
+      } else {
+        alert(d.msg || '取消失败');
+        btn.disabled = false;
+        btn.textContent = '取消订单';
+      }
+    } catch (e) {
+      alert('网络错误');
+      btn.disabled = false;
+      btn.textContent = '取消订单';
+    }
+  };
+})();
+</script>
+{% endblock %}

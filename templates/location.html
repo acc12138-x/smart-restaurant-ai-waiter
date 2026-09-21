@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% set active = 'location' %}
+{% block title %}门店 · 同盛祥{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1 class="page-title">门店</h1>
+  <p class="page-sub">老巷子 88 号</p>
+</header>
+
+<!-- 地图卡片 -->
+<a class="map-card" href="https://uri.amap.com/marker?position=108.94,34.26&name=同盛祥泡馍老店" target="_blank" rel="noopener">
+  <div class="map-visual">
+    <div class="map-pin"></div>
+    <span class="map-hint">点击导航</span>
+  </div>
+  <div class="map-info">
+    <p class="map-name">同盛祥西安泡馍老店</p>
+    <p class="map-addr">西安市碑林区老巷子 88 号</p>
+  </div>
+</a>
+
+<!-- 信息列表 -->
+<ul class="info-list">
+<li>
+  <span class="info-k">营业</span>
+  <span class="info-v">10:30 — 次日 02:00</span>
+</li>
+<li>
+  <span class="info-k">深夜食堂</span>
+  <span class="info-v">21:00 后进店送热汤</span>
+</li>
+  <li>
+    <span class="info-k">电话</span>
+    <a class="info-v info-link" href="tel:02988886666">029-8888 6666</a>
+  </li>
+  <li>
+    <span class="info-k">地铁</span>
+    <span class="info-v">2 号线钟楼站 C 口，步行 300 米</span>
+  </li>
+</ul>
+
+<!-- 留言 -->
+<section class="msg-block">
+  <div class="msg-head">
+    <h2 class="msg-title">给老店留句话</h2>
+    <p class="msg-sub">我们真的会看</p>
+  </div>
+
+  <form id="msgForm" novalidate>
+    <div class="field-wrap">
+      <input
+        name="name"
+        id="msgName"
+        class="field"
+        type="text"
+        placeholder="怎么称呼你"
+        maxlength="20"
+        autocomplete="name"
+      >
+    </div>
+
+    <div class="field-wrap">
+      <textarea
+        name="content"
+        id="msgContent"
+        class="field field-area"
+        rows="4"
+        placeholder="想说的话…"
+        maxlength="100"
+        required
+      ></textarea>
+      <span class="char-count" id="charCount">0 / 100</span>
+    </div>
+
+    <button class="submit" type="submit" id="submitBtn">
+      <span class="submit-text">发送</span>
+      <span class="submit-spinner"></span>
+      <svg class="submit-check" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M20 6 9 17l-5-5"/>
+      </svg>
+    </button>
+
+    <p class="form-tip" id="formTip" role="status" aria-live="polite"></p>
+  </form>
+
+  <!-- 成功感谢卡 -->
+  <div class="thanks-card" id="thanksCard" aria-hidden="true">
+    <span class="thanks-emoji">🍜</span>
+    <div>
+      <p class="thanks-title">收到了</p>
+      <p class="thanks-desc">下次来店里，记得说一声是你留的言</p>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block script %}
+<script>
+(function(){
+  const form      = document.getElementById('msgForm');
+  const nameInput = document.getElementById('msgName');
+  const content   = document.getElementById('msgContent');
+  const charCount = document.getElementById('charCount');
+  const btn       = document.getElementById('submitBtn');
+  const btnText   = btn.querySelector('.submit-text');
+  const tip       = document.getElementById('formTip');
+  const thanks    = document.getElementById('thanksCard');
+
+  const MAX = 100;
+  let submitting = false;
+
+  /* 字数统计 */
+  function updateCount(){
+    const len = content.value.length;
+    charCount.textContent = len + ' / ' + MAX;
+    charCount.classList.toggle('warn', len >= MAX - 10);
+  }
+  content.addEventListener('input', updateCount);
+  updateCount();
+
+  /* 提示 */
+  let tipTimer;
+  function showTip(text, type){
+    clearTimeout(tipTimer);
+    tip.textContent = text;
+    tip.className = 'form-tip ' + type;
+    if (type === 'error'){
+      tipTimer = setTimeout(() => {
+        tip.classList.add('fade');
+        setTimeout(() => { tip.textContent = ''; tip.classList.remove('fade'); }, 300);
+      }, 2400);
+    }
+  }
+
+  /* 按钮状态 */
+  function setLoading(){
+    submitting = true;
+    btn.disabled = true;
+    btn.classList.add('loading');
+    btnText.textContent = '发送中…';
+  }
+  function setSuccess(){
+    btn.classList.remove('loading');
+    btn.classList.add('success');
+    btnText.textContent = '已收到';
+  }
+  function resetBtn(){
+    submitting = false;
+    btn.disabled = false;
+    btn.classList.remove('loading', 'success');
+    btnText.textContent = '发送';
+  }
+  function shakeBtn(){
+    btn.classList.add('shake');
+    btn.addEventListener('animationend', () => btn.classList.remove('shake'), { once: true });
+  }
+
+  /* 提交 */
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (submitting) return;
+
+    const text = content.value.trim();
+    if (!text){
+      shakeBtn();
+      showTip('写点什么再发吧', 'error');
+      content.focus();
+      return;
+    }
+    if (text.length > MAX){
+      showTip('已经超过 ' + MAX + ' 字啦', 'error');
+      return;
+    }
+
+    setLoading();
+
+    const data = {
+      name: nameInput.value.trim() || '一位老客',
+      content: text
+    };
+
+    try {
+      const res = await fetch('/api/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      }).then(r => r.json());
+
+      if (res && res.code === 0){
+        setSuccess();
+        showTip('', '');
+        form.style.transition = 'opacity .35s';
+        form.style.opacity = '0';
+        setTimeout(() => {
+          form.reset();
+          updateCount();
+          form.style.opacity = '1';
+          thanks.classList.add('show');
+          thanks.setAttribute('aria-hidden', 'false');
+          setTimeout(() => {
+            resetBtn();
+            thanks.classList.remove('show');
+            thanks.setAttribute('aria-hidden', 'true');
+          }, 3600);
+        }, 380);
+      } else {
+        throw new Error(res && res.msg ? res.msg : '提交失败');
+      }
+    } catch (err){
+      resetBtn();
+      btnText.textContent = '重试';
+      showTip(err.message || '网络不太好，稍后再试', 'error');
+    }
+  });
+
+  /* 键盘弹出时滚动到可视区 */
+  [content, nameInput].forEach(el => {
+    el.addEventListener('focus', () => {
+      setTimeout(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    });
+  });
+
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{% block title %}个人中心 · 同盛祥{% endblock %}
+{% block content %}
+
+<header class="page-head">
+  <h1 class="page-title">个人中心</h1>
+  <p class="page-sub">积分 · 兑换 · 订单</p>
+</header>
+
+<div id="profileBox" class="profile-box">
+  <div class="skeleton-list"></div>
+</div>
+
+<!-- 登录 / 注册 弹窗 -->
+<div class="modal auth-modal" id="authModal">
+  <div class="modal-panel" style="width:min(400px,92vw);">
+    <div class="modal-head">
+      <h3 id="authTitle">登录</h3>
+      <button class="modal-close" onclick="closeAuth()">×</button>
+    </div>
+    <div class="modal-body" style="padding:20px 22px;">
+      <label class="nf-label">用户名</label>
+      <input type="text" id="authUser" class="nf-input" placeholder="3-20 位" maxlength="20">
+      <label class="nf-label" style="margin-top:14px;">密码</label>
+      <input type="password" id="authPass" class="nf-input" placeholder="至少 6 位" maxlength="30">
+      <div id="authRegField" style="display:none;">
+        <label class="nf-label" style="margin-top:14px;">昵称（选填）</label>
+        <input type="text" id="authNick" class="nf-input" placeholder="怎么称呼你" maxlength="20">
+      </div>
+      <p id="authMsg" class="auth-msg"></p>
+    </div>
+    <div class="modal-foot" style="flex-direction:column;gap:10px;align-items:stretch;">
+      <button class="btn-blue" id="authSubmit" style="width:100%;">登录</button>
+      <button class="btn-outline" id="authSwitch" style="width:100%;">没有账号？去注册</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block script %}
+<script>
+(function(){
+  var box = document.getElementById('profileBox');
+  var authMode = 'login';  // 'login' | 'register'
+
+  // ---------- 打开登录弹窗 ----------
+  window.openAuth = function(mode){
+    authMode = mode || 'login';
+    var isReg = authMode === 'register';
+    document.getElementById('authTitle').textContent = isReg ? '注册' : '登录';
+    document.getElementById('authSubmit').textContent = isReg ? '注册并登录' : '登录';
+    document.getElementById('authSwitch').textContent = isReg ? '已有账号？去登录' : '没有账号？去注册';
+    document.getElementById('authRegField').style.display = isReg ? '' : 'none';
+    document.getElementById('authMsg').textContent = '';
+    document.getElementById('authUser').value = '';
+    document.getElementById('authPass').value = '';
+    document.getElementById('authNick').value = '';
+    document.getElementById('authModal').classList.add('show');
+    setTimeout(function(){ document.getElementById('authUser').focus(); }, 100);
+  };
+
+  window.closeAuth = function(){
+    document.getElementById('authModal').classList.remove('show');
+  };
+
+  document.getElementById('authModal').onclick = function(e){
+    if (e.target.id === 'authModal') closeAuth();
+  };
+
+  document.getElementById('authSwitch').onclick = function(){
+    openAuth(authMode === 'login' ? 'register' : 'login');
+  };
+
+  document.getElementById('authSubmit').onclick = submitAuth;
+  document.getElementById('authPass').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') submitAuth();
+  });
+
+  async function submitAuth(){
+    var btn = document.getElementById('authSubmit');
+    var msg = document.getElementById('authMsg');
+    var username = document.getElementById('authUser').value.trim();
+    var password = document.getElementById('authPass').value;
+    var nickname = document.getElementById('authNick').value.trim();
+
+    if (!username || !password) { msg.textContent = '请填写用户名和密码'; return; }
+    if (username.length < 3) { msg.textContent = '用户名至少 3 位'; return; }
+    if (password.length < 6) { msg.textContent = '密码至少 6 位'; return; }
+
+    btn.disabled = true;
+    btn.textContent = '提交中…';
+    msg.textContent = '';
+
+    var url = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+    try {
+      var r = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: username, password: password, nickname: nickname}),
+      });
+      var d = await r.json();
+      if (d.code === 0 && d.data && d.data.token) {
+        Auth.save(d.data.token, d.data.member);
+        closeAuth();
+        renderProfile();
+      } else {
+        msg.textContent = d.msg || '失败';
+      }
+    } catch (e) {
+      msg.textContent = '网络错误';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = authMode === 'register' ? '注册并登录' : '登录';
+    }
+  }
+
+  // ---------- 渲染主页面 ----------
+  function renderProfile(){
+    if (!window.Auth || !Auth.isLogin()){
+      box.innerHTML = renderGuest();
+      document.getElementById('guestLoginBtn').onclick = function(){ openAuth('login'); };
+      document.getElementById('guestRegBtn').onclick = function(){ openAuth('register'); };
+      return;
+    }
+
+    fetch('/api/points/me', {
+      headers: {'Authorization': 'Bearer ' + Auth.getToken()}
+    })
+      .then(function(r){
+        if (r.status === 401) {
+          // token 过期：清掉，显示登录
+          Auth.logout();
+          box.innerHTML = renderGuest('登录已过期，请重新登录');
+          document.getElementById('guestLoginBtn').onclick = function(){ openAuth('login'); };
+          document.getElementById('guestRegBtn').onclick = function(){ openAuth('register'); };
+          throw new Error('expired');
+        }
+        return r.json();
+      })
+      .then(function(res){
+        if (!res || res.code !== 0) {
+          box.innerHTML = '<p class="empty">' + (res && res.msg || '加载失败') + '</p>';
+          return;
+        }
+        renderMember(res.data);
+      })
+      .catch(function(e){
+        if (e.message !== 'expired') {
+          box.innerHTML = '<p class="empty">加载失败，请检查网络</p>';
+        }
+      });
+  }
+
+  // 未登录 / 过期时的界面
+  function renderGuest(hint){
+    // 读本机下过的订单（匿名下单也存）
+    var localOrders = [];
+    try {
+      localOrders = JSON.parse(localStorage.getItem('tsx-orders') || '[]');
+    } catch(e) {}
+
+    var guestCard = '<div class="pf-guest">' +
+      '<div class="pf-guest-icon">👤</div>' +
+      '<h2>还没登录</h2>' +
+      '<p>' + (hint || '登录后可查看积分、兑换奖励，跨设备同步订单') + '</p>' +
+      '<div class="pf-guest-btns">' +
+        '<button class="pf-btn" id="guestLoginBtn">立即登录</button>' +
+        '<button class="pf-btn-ghost" id="guestRegBtn">新用户注册</button>' +
+      '</div>' +
+    '</div>';
+
+    var ordersBlock = '';
+    if (localOrders.length) {
+      ordersBlock =
+        '<h2 class="pf-section-title" style="margin-top:32px;">本机订单记录</h2>' +
+        '<p class="pf-orders-hint">仅保存在这台设备上，登录后可跨设备同步</p>' +
+        '<div class="pf-orders pf-orders-guest">' +
+        localOrders.map(function(o){
+          var status = o.status || 'pending';
+          return '<div class="pf-order">' +
+            '<div class="pf-order-head">' +
+              '<span class="pf-order-id">' + o.id + '</span>' +
+              '<span class="pf-order-status ' + status + '">' + statusText(status) + '</span>' +
+            '</div>' +
+            '<div class="pf-order-items">' +
+              (o.items||[]).map(function(it){ return '<span>' + it.name + ' × ' + it.qty + '</span>'; }).join('') +
+            '</div>' +
+            '<div class="pf-order-foot">' +
+              '<span>' + (o.created_at||'') + '</span>' +
+              '<b>¥' + o.total + '</b>' +
+            '</div>' +
+            '<div class="pf-order-actions">' +
+              '<a href="/order/' + o.id + '" class="pf-order-track">查看跟踪 →</a>' +
+            '</div>' +
+          '</div>';
+        }).join('') +
+        '</div>';
+    }
+
+    return guestCard + ordersBlock;
+  }
+
+  function renderMember(d){
+    var user = Auth.getUser() || {};
+    var next = d.next_level
+      ? '<div class="pf-next">' +
+          '<span>距离 ' + d.next_level.name + ' 还差 ' + d.next_level.need + ' 分</span>' +
+          '<div class="pf-bar"><div style="width:' + (d.points / d.next_level.threshold * 100).toFixed(1) + '%"></div></div>' +
+        '</div>'
+      : '<p class="pf-max">已达最高等级 🎉</p>';
+
+    var items = (d.exchange_items || []).map(function(it){
+      var disabled = d.points < it.cost ? 'disabled' : '';
+      var label = d.points < it.cost ? '积分不足' : '兑换';
+      return '<div class="pf-item">' +
+        '<div>' +
+          '<div class="pf-item-name">' + it.name + '</div>' +
+          '<div class="pf-item-cost">' + it.cost + ' 积分</div>' +
+        '</div>' +
+        '<button class="pf-exchange-btn" data-key="' + it.key + '" ' + disabled + '>' + label + '</button>' +
+      '</div>';
+    }).join('');
+
+    box.innerHTML =
+      '<div class="pf-card">' +
+        '<div class="pf-user">' +
+          '<span class="pf-nick">' + (user.nickname || user.username || '老客') + '</span>' +
+          '<span class="pf-level">' + d.level + '</span>' +
+        '</div>' +
+        '<div class="pf-points"><b>' + d.points + '</b><span>积分</span></div>' +
+        next +
+        '<div class="pf-logout"><button id="pfLogoutBtn">退出登录</button></div>' +
+      '</div>' +
+
+      '<h2 class="pf-section-title">积分兑换</h2>' +
+      '<div class="pf-exchange">' + items + '</div>' +
+
+      '<h2 class="pf-section-title">我的订单</h2>' +
+      '<div id="orderList" class="pf-orders"><p class="empty">加载中…</p></div>';
+
+    box.querySelectorAll('.pf-exchange-btn').forEach(function(b){
+      b.onclick = function(){ exchangeItem(b.dataset.key); };
+    });
+    document.getElementById('pfLogoutBtn').onclick = function(){
+      if (!confirm('退出登录？')) return;
+      Auth.logout();
+      renderProfile();
+    };
+
+    loadOrders();
+  }
+
+  async function exchangeItem(key){
+    try {
+      var res = await fetch('/api/points/exchange', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + Auth.getToken()
+        },
+        body: JSON.stringify({item: key})
+      }).then(function(r){ return r.json(); });
+
+      alert(res.msg || '完成');
+      if (res.code === 0) renderProfile();
+    } catch (e) {
+      alert('网络错误');
+    }
+  }
+
+  function loadOrders(){
+    var listBox = document.getElementById('orderList');
+    if (!listBox) return;
+
+    fetch('/api/user/orders', {
+      headers: {'Authorization': 'Bearer ' + Auth.getToken()}
+    })
+      .then(function(r){
+        if (r.status === 401) {
+          Auth.logout();
+          renderProfile();
+          throw new Error('expired');
+        }
+        return r.json();
+      })
+      .then(function(res){
+        if (!res || res.code !== 0) {
+          listBox.innerHTML = '<p class="empty">' + (res && res.msg || '加载失败') + '</p>';
+          return;
+        }
+        var orders = res.data || [];
+        if (!orders.length) {
+          listBox.innerHTML = '<p class="empty">还没有订单，去菜单看看</p>';
+          return;
+        }
+        listBox.innerHTML = orders.map(function(o){
+          return '<div class="pf-order">' +
+            '<div class="pf-order-head">' +
+              '<span class="pf-order-id">' + o.id + '</span>' +
+              '<span class="pf-order-status ' + o.status + '">' + statusText(o.status) + '</span>' +
+            '</div>' +
+            '<div class="pf-order-items">' +
+              o.items.map(function(it){ return '<span>' + it.name + ' × ' + it.qty + '</span>'; }).join('') +
+            '</div>' +
+            '<div class="pf-order-foot">' +
+              '<span>' + o.created_at + '</span>' +
+              '<b>¥' + o.total + '</b>' +
+            '</div>' +
+            '<div class="pf-order-actions">' +
+              ((o.status === 'pending' || o.status === 'paid')
+                ? '<button class="pf-order-cancel" data-id="' + o.id + '">取消订单</button>'
+                : '') +
+              '<a href="/order/' + o.id + '" class="pf-order-track">查看跟踪 →</a>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+        // 绑定"取消订单"按钮
+        listBox.querySelectorAll('.pf-order-cancel').forEach(function(btn){
+          btn.onclick = async function(){
+            var oid = btn.dataset.id;
+            if (!confirm('确定取消订单 ' + oid + '？\n取消后不可恢复。')) return;
+            btn.disabled = true;
+            btn.textContent = '取消中…';
+            try {
+              var token = localStorage.getItem('tsx-token') || '';
+              var headers = {'Content-Type': 'application/json'};
+              if (token) headers['Authorization'] = 'Bearer ' + token;
+              var r = await fetch('/api/order/' + oid + '/cancel', {
+                method: 'POST', headers: headers
+              });
+              var d = await r.json();
+              if (d.code === 0) {
+                alert('已取消');
+                renderProfile();
+              } else {
+                alert(d.msg || '取消失败');
+                btn.disabled = false;
+                btn.textContent = '取消订单';
+              }
+            } catch (e) {
+              alert('网络错误');
+              btn.disabled = false;
+              btn.textContent = '取消订单';
+            }
+          };
+        });
+      })
+      .catch(function(e){
+        if (e.message !== 'expired') {
+          listBox.innerHTML = '<p class="empty">加载失败</p>';
+        }
+      });
+  }
+
+  function statusText(s){
+    var map = {
+      pending: '待付款', paid: '已付款', cooking: '制作中',
+      done: '已完成', cancelled: '已取消'
+    };
+    return map[s] || s;
+  }
+
+  // 启动
+  renderProfile();
+
+  // 从其他地方（如 menu.html）跳过来时带 ?login=1，自动弹登录
+  if (new URLSearchParams(location.search).get('login') === '1' && !Auth.isLogin()) {
+    openAuth('login');
+  }
+})();
+</script>
+{% endblock %}

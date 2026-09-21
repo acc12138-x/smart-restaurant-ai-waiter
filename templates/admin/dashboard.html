@@ -1,0 +1,263 @@
+﻿{% extends "admin/base.html" %}
+{% set active = 'dashboard' %}
+{% block page_title %}数据总览{% endblock %}
+{% block content %}
+
+<!-- ==================== 经营数据 ==================== -->
+<div class="section-block">
+  <h2 class="block-h2">经营数据</h2>
+  <div class="kpi-grid">
+    <div class="kpi-card kpi-red">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-body">
+        <div class="kpi-label">今日营业额</div>
+        <div class="kpi-value">¥{{ stats.revenue_today }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-icon">📋</div>
+      <div class="kpi-body">
+        <div class="kpi-label">今日订单</div>
+        <div class="kpi-value">{{ stats.order_today }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-orange">
+      <div class="kpi-icon">📈</div>
+      <div class="kpi-body">
+        <div class="kpi-label">累计营业额</div>
+        <div class="kpi-value">¥{{ stats.revenue_total }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-purple">
+      <div class="kpi-icon">🧾</div>
+      <div class="kpi-body">
+        <div class="kpi-label">累计订单</div>
+        <div class="kpi-value">{{ stats.order_total }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-green">
+      <div class="kpi-icon">👥</div>
+      <div class="kpi-body">
+        <div class="kpi-label">注册用户</div>
+        <div class="kpi-value">{{ stats.user_total }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-cyan">
+      <div class="kpi-icon">🤖</div>
+      <div class="kpi-body">
+        <div class="kpi-label">AI 对话数</div>
+        <div class="kpi-value">{{ stats.chat_total }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-pink">
+      <div class="kpi-icon">💬</div>
+      <div class="kpi-body">
+        <div class="kpi-label">留言</div>
+        <div class="kpi-value">{{ stats.message_total }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 流量数据 ==================== -->
+<div class="section-block">
+  <h2 class="block-h2">流量数据</h2>
+  <div class="kpi-grid kpi-grid-6">
+    <div class="kpi-card kpi-blue small">
+      <div class="kpi-icon">🚶</div>
+      <div class="kpi-body">
+        <div class="kpi-label">今日访客</div>
+        <div class="kpi-value">{{ events.today.visitors }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-indigo small">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-body">
+        <div class="kpi-label">总访问人次</div>
+        <div class="kpi-value">{{ events.total_visitors }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-cyan small">
+      <div class="kpi-icon">👁</div>
+      <div class="kpi-body">
+        <div class="kpi-label">今日页面浏览</div>
+        <div class="kpi-value">{{ events.today.page_view }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-green small">
+      <div class="kpi-icon">💭</div>
+      <div class="kpi-body">
+        <div class="kpi-label">今日 AI 对话</div>
+        <div class="kpi-value">{{ events.today.chat_message }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-orange small">
+      <div class="kpi-icon">🛒</div>
+      <div class="kpi-body">
+        <div class="kpi-label">今日下单</div>
+        <div class="kpi-value">{{ events.today.order_created }}</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-purple small">
+      <div class="kpi-icon">📡</div>
+      <div class="kpi-body">
+        <div class="kpi-label">累计事件</div>
+        <div class="kpi-value">{{ events.total_events }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 环形图区 ==================== -->
+<div class="chart-row">
+  <div class="chart-card">
+    <h3 class="chart-title">事件分布</h3>
+    <div class="chart-box">
+      <canvas id="chartEvents"></canvas>
+    </div>
+  </div>
+  <div class="chart-card">
+    <h3 class="chart-title">意图分布</h3>
+    <div class="chart-box">
+      <canvas id="chartIntents"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 页面访问（HTML 条形图） ==================== -->
+<div class="section-block">
+  <div class="chart-card">
+    <h3 class="chart-title">页面访问 Top</h3>
+    <div class="page-bar-list" id="pageBarList">
+      <p class="muted">加载中…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 热门问题 + 快捷入口 ==================== -->
+<div class="chart-row">
+  <div class="chart-card">
+    <h3 class="chart-title">热门问题 Top 5</h3>
+    <div class="hot-list">
+      {% for q, cnt in events.hot_questions %}
+      <div class="hot-row">
+        <span class="hot-rank">{{ loop.index }}</span>
+        <span class="hot-q">{{ q }}</span>
+        <span class="hot-cnt">{{ cnt }}</span>
+      </div>
+      {% else %}
+      <p class="muted">暂无数据</p>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="chart-card">
+    <h3 class="chart-title">快捷入口</h3>
+    <div class="quick-grid">
+      <a href="/admin/orders" class="quick-card">
+        <span class="qc-icon">🧾</span><span class="qc-text">处理订单</span>
+      </a>
+      <a href="/admin/chat-logs" class="quick-card">
+        <span class="qc-icon">🤖</span><span class="qc-text">AI 记录</span>
+      </a>
+      <a href="/admin/kb" class="quick-card">
+        <span class="qc-icon">📚</span><span class="qc-text">知识库</span>
+      </a>
+      <a href="/admin/tables" class="quick-card">
+        <span class="qc-icon">🔳</span><span class="qc-text">生成桌码</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<script id="dashboardData" type="application/json">
+{{ {'events': events.event_distribution, 'intents': events.intent_distribution, 'pages': events.page_distribution} | tojson }}
+</script>
+
+{% endblock %}
+{% block script %}
+<script src="https://cdn.bootcdn.net/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script>
+(function(){
+  const data = JSON.parse(document.getElementById('dashboardData').textContent);
+
+  const PALETTE = ['#3B82F6','#EF4444','#F59E0B','#10B981',
+                   '#8B5CF6','#EC4899','#06B6D4','#84CC16'];
+  const FONT = {family: '-apple-system,"PingFang SC","Microsoft YaHei",sans-serif'};
+
+  // ---------- 事件分布 环形图 ----------
+  const evLabels = Object.keys(data.events || {});
+  const evValues = Object.values(data.events || {});
+  if (evLabels.length) {
+    new Chart(document.getElementById('chartEvents'), {
+      type: 'doughnut',
+      data: {
+        labels: evLabels,
+        datasets: [{data: evValues, backgroundColor: PALETTE,
+                    borderWidth: 2, borderColor: '#fff'}]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '60%',
+        plugins: {
+          legend: {position: 'right', labels: {font: FONT, padding: 12, boxWidth: 12}},
+          tooltip: {bodyFont: FONT, titleFont: FONT}
+        }
+      }
+    });
+  } else {
+    document.getElementById('chartEvents').parentNode.innerHTML =
+      '<p class="muted" style="text-align:center;padding:80px 0;">暂无数据</p>';
+  }
+
+  // ---------- 意图分布 环形图 ----------
+  const inLabels = Object.keys(data.intents || {});
+  const inValues = Object.values(data.intents || {});
+  if (inLabels.length) {
+    new Chart(document.getElementById('chartIntents'), {
+      type: 'doughnut',
+      data: {
+        labels: inLabels,
+        datasets: [{data: inValues, backgroundColor: PALETTE.slice().reverse(),
+                    borderWidth: 2, borderColor: '#fff'}]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '60%',
+        plugins: {
+          legend: {position: 'right', labels: {font: FONT, padding: 12, boxWidth: 12}},
+          tooltip: {bodyFont: FONT, titleFont: FONT}
+        }
+      }
+    });
+  } else {
+    document.getElementById('chartIntents').parentNode.innerHTML =
+      '<p class="muted" style="text-align:center;padding:80px 0;">暂无数据</p>';
+  }
+
+  // ---------- 页面访问 · 原生 HTML 条形图 ----------
+  (function renderPageBars(){
+    const box = document.getElementById('pageBarList');
+    const raw = data.pages || {};
+    // 过滤脏路径 + 降序 + 取前 10
+    const entries = Object.entries(raw)
+      .filter(([k]) => k && !k.startsWith('//') && k !== '')
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    if (!entries.length) {
+      box.innerHTML = '<p class="muted">暂无数据</p>';
+      return;
+    }
+    const max = Math.max(...entries.map(e => e[1]));
+    box.innerHTML = entries.map(([path, cnt]) => `
+      <div class="page-bar-row">
+        <span class="page-bar-label">${path}</span>
+        <div class="page-bar-track">
+          <div class="page-bar-fill" style="width:${(cnt / max * 100).toFixed(1)}%">
+            <span class="page-bar-num">${cnt}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  })();
+})();
+</script>
+{% endblock %}
