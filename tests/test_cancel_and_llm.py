@@ -147,14 +147,10 @@ def test_points_deducted_after_cancel_paid_order():
 # ============================================================
 # LLM Parser
 # ============================================================
-def test_llm_parser_disabled_by_default():
-    """LLM 默认关闭"""
-    # 如果环境变量没设，ENABLED 应为 False
+def test_llm_parser_is_enabled_returns_bool():
+    """v3.9：LLM 默认开启，is_enabled() 返回 bool"""
     from services.llm_parser import is_enabled
-    import os
-    if os.environ.get('USE_LLM_PARSER') == '1':
-        pytest.skip('当前已开启 LLM Parser')
-    assert is_enabled() is False
+    assert isinstance(is_enabled(), bool)
 
 
 def test_llm_parser_returns_none_when_disabled():

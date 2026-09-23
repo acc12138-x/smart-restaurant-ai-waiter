@@ -14,6 +14,7 @@ venv/
 env/
 ENV/
 venv312/
+_testenv/
 
 # ========== 测试 ==========
 .pytest_cache/
@@ -34,11 +35,12 @@ data/app.db
 data/app.db-*
 data/backup/
 
-# ========== 运行时数据 ==========
+# ========== 运行时数据（不应上传）==========
 data/members.json
 data/orders.json
 data/message.json
 data/events.json
+data/points_log.json
 data/rag_logs.json
 
 # ========== 日志 ==========
@@ -46,7 +48,7 @@ logs/*.log
 logs/*.log.*
 logs/*.bak*
 
-# ========== 向量库（重新构建） ==========
+# ========== 向量库 ==========
 vector_store/*
 !vector_store/.gitkeep
 
@@ -57,25 +59,16 @@ vector_store/*
 *.bak.*
 data/*.bak*
 
-# ========== 临时脚本（以 _ 开头） ==========
-_*.py
-_*.txt
+# ========== 临时脚本（仅根目录，不匹配子目录的 __init__.py）==========
+/_*.py
+/_*.txt
 
-# ========== 上传的视频（大文件） ==========
-static/video/hero/*.mp4
-static/video/hero/*.webm
-static/video/hero/*.mov
-static/video/*.mp4
-
-# ========== 上传的帧图 ==========
-# static/frames/*.jpg  ← 这行注释掉，如果想提交帧图就留着
-
-# ========== 邮件 / 密钥 ==========
-.env
-.env.*
-secrets.json
-data/points_log.json
+# ========== 大文件 ==========
 *.pptx
 *.docx
 *.mp4
-��������.mp4
+
+# ========== 密钥 ==========
+.env
+.env.*
+secrets.json
