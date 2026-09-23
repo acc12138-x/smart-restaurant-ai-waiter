@@ -1,0 +1,50 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Init database & admin
+        env:
+          SKIP_WARMUP: "1"
+          FLASK_ENV: development
+        run: |
+          python scripts/init_admin.py
+
+      - name: Run pytest
+        env:
+          SKIP_WARMUP: "1"
+          FLASK_ENV: development
+        run: |
+          pytest tests/ -v --tb=short
+
+      - name: Upload log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-logs
+          path: logs/
+          if-no-files-found: ignore
