@@ -535,6 +535,14 @@ cancelled  cancelled
 
 ---
 
+## 📚 文档
+
+- [DEPLOY.md](DEPLOY.md) — **云服务器部署指南**（从零到上线）
+- [API.md](API.md) — **接口文档**（50+ 接口，含示例）
+- [ARCHITECTURE.md](ARCHITECTURE.md) — **架构设计与踩坑记录**
+
+---
+
 ## 📄 License
 
 MIT © 2026 acc12138-x
