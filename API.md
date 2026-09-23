@@ -6,13 +6,13 @@
 
 ### 响应格式
 
-{T3}json
+```json
 {
   "code": 0,
   "msg": "ok",
   "data": {}
 }
-{T3}
+```
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -47,16 +47,16 @@
 注册新用户。
 
 **请求体**：
-{T3}json
+```json
 {
   "username": "testuser",
   "password": "123456",
   "nickname": "测试员"
 }
-{T3}
+```
 
 **响应**：
-{T3}json
+```json
 {
   "code": 0,
   "msg": "注册成功",
@@ -71,7 +71,7 @@
     "token": "eyJhbGci..."
   }
 }
-{T3}
+```
 
 ### POST /api/auth/login
 
@@ -84,7 +84,7 @@
 **请求头**：`Authorization: Bearer <token>`
 
 **响应**：
-{T3}json
+```json
 {
   "code": 0,
   "data": {
@@ -94,7 +94,7 @@
     "level": "新客"
   }
 }
-{T3}
+```
 
 ---
 
@@ -105,12 +105,12 @@
 AI 对话（非流式）。
 
 **请求体**：
-{T3}json
+```json
 { "message": "来两份牛肉泡馍", "table_no": "外带" }
-{T3}
+```
 
 **响应（点菜成功）**：
-{T3}json
+```json
 {
   "code": 0,
   "data": {
@@ -125,7 +125,7 @@ AI 对话（非流式）。
     }
   }
 }
-{T3}
+```
 
 ### POST /api/chat/stream
 
@@ -151,9 +151,9 @@ AI 对话（SSE 流式）。
 获取个性化欢迎语（需登录）。
 
 **响应**：
-{T3}json
+```json
 { "code": 0, "data": { "message": "张三您好！上次您点的..." } }
-{T3}
+```
 
 ---
 
@@ -164,7 +164,7 @@ AI 对话（SSE 流式）。
 获取菜单。
 
 **响应**：
-{T3}json
+```json
 {
   "code": 0,
   "data": [
@@ -176,28 +176,28 @@ AI 对话（SSE 流式）。
     }
   ]
 }
-{T3}
+```
 
 ### POST /api/order/create
 
 购物车下单（跳过 LLM，毫秒级）。**需登录**。
 
 **请求体**：
-{T3}json
+```json
 {
   "items": [{"name": "牛肉泡馍(小份)", "qty": 1}],
   "table_no": "05"
 }
-{T3}
+```
 
 **响应**：
-{T3}json
+```json
 {
   "code": 0,
   "msg": "下单成功",
   "data": { "order": {...}, "failed": [] }
 }
-{T3}
+```
 
 ### GET /api/user/orders
 
@@ -216,7 +216,7 @@ AI 对话（SSE 流式）。
 查询我的积分。**需登录**。
 
 **响应**：
-{T3}json
+```json
 {
   "code": 0,
   "data": {
@@ -228,7 +228,7 @@ AI 对话（SSE 流式）。
     ]
   }
 }
-{T3}
+```
 
 ### POST /api/points/exchange
 
@@ -245,18 +245,18 @@ AI 对话（SSE 流式）。
 提交留言。
 
 **请求体**：
-{T3}json
+```json
 { "name": "张三", "content": "泡馍很好吃" }
-{T3}
+```
 
 ### POST /api/track
 
 前端埋点上报。支持事件：`page_view`、`chat_message`、`order_created`、`mode_switch`、`add_to_cart`。
 
 **请求体**：
-{T3}json
+```json
 { "event": "page_view", "payload": {"page": "/menu"} }
-{T3}
+```
 
 ### POST /api/table/scan
 
@@ -273,7 +273,7 @@ AI 对话（SSE 流式）。
 获取首页配置（公开）。
 
 **响应**：
-{T3}json
+```json
 {
   "code": 0,
   "data": {
@@ -282,7 +282,7 @@ AI 对话（SSE 流式）。
     "autoplay_ms": 8000
   }
 }
-{T3}
+```
 
 ---
 
@@ -293,12 +293,12 @@ AI 对话（SSE 流式）。
 健康检查。
 
 **响应**：
-{T3}json
+```json
 {
   "status": "ok",
   "checks": {"flask": true, "vector_store": true, "ollama": true}
 }
-{T3}
+```
 
 ### GET /api/docs
 

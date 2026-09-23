@@ -4,7 +4,7 @@
 
 ### 1.1 分层设计
 
-{T3}
+```
 ┌──────────────────────────────────────────┐
 │  路由层（routes/）                        │
 │  只负责：接收请求、调用服务、返回响应       │
@@ -22,11 +22,11 @@
 │  抽象接口 BaseRepository                  │
 │  实现 SqliteRepository / JsonRepository  │
 └──────────────────────────────────────────┘
-{T3}
+```
 
 ### 1.2 数据流示例：AI 点菜
 
-{T3}
+```
 用户输入 "来两份牛肉泡馍"
     ↓
 POST /api/chat
@@ -47,7 +47,7 @@ services/chat_service.py
     └── 返回 reply, intent, order
     ↓
 前端渲染订单卡片
-{T3}
+```
 
 ---
 
@@ -65,7 +65,7 @@ services/chat_service.py
 
 ### 2.2 双轨流程
 
-{T3}
+```
 用户输入
   ↓
 chat_service._get_intent_result()
@@ -81,13 +81,13 @@ chat_service 分发（13 类意图）
   ├─ 推荐 / 接受推荐 / 拒绝推荐
   ├─ 留言
   └─ 兜底 → RAG（Ollama + Chroma）
-{T3}
+```
 
 ### 2.3 白名单校验
 
 LLM 返回的菜名必须在 `menu.json` 里，否则丢弃：
 
-{T3}python
+```python
 def _normalize_items(items, menu_names):
     menu_set = set(menu_names)
     result = []
@@ -102,7 +102,7 @@ def _normalize_items(items, menu_names):
             dish = matched
         result.append({'name': dish, 'qty': min(50, max(1, int(it.get('qty', 1))))})
     return result
-{T3}
+```
 
 ### 2.4 三层防御（防小模型胡言乱语）
 
@@ -130,11 +130,11 @@ def _normalize_items(items, menu_names):
 
 ### 3.2 三级路由
 
-{T3}
+```
 1. 菜单关键词 → 快路径（10ms，不加载 bge-m3）
 2. 门店专属问题 → RAG 检索（bge-m3 + Chroma）
 3. 通用问题 → 直接调 Qwen3（不检索）
-{T3}
+```
 
 ### 3.3 为什么选 bge-m3
 
@@ -198,12 +198,12 @@ def _normalize_items(items, menu_names):
 
 ### 5.3 订单状态机
 
-{T3}
+```
 pending ──→ paid ──→ cooking ──→ done
    │         │           │
    ↓         ↓
 cancelled  cancelled
-{T3}
+```
 
 非法转换直接拦（`cooking` 不能退单，`done` 不能取消）。
 
@@ -217,7 +217,7 @@ cancelled  cancelled
 
 ### 6.2 敏感字段脱敏
 
-{T3}python
+```python
 SENSITIVE_KEYS = {'api_key', 'wecom_webhook'}
 
 def get_all(self, mask_sensitive=True):
@@ -227,7 +227,7 @@ def get_all(self, mask_sensitive=True):
                 result[k + '_masked'] = _mask(result[k])  # sk-abc****xyz
                 result[k] = ''
     return result
-{T3}
+```
 
 ### 6.3 异步通知
 
@@ -247,15 +247,15 @@ def get_all(self, mask_sensitive=True):
 
 ### 7.1 本地开发
 
-{T3}
+```
 python app.py
 # 或
 python server.py  (Waitress 8 线程)
-{T3}
+```
 
 ### 7.2 Docker 生产
 
-{T3}
+```
 用户浏览器
    ↓ HTTPS
 Nginx（宿主机）
@@ -267,7 +267,7 @@ Docker 容器 tsx-app
    └── Flask 应用
    ↓
 SQLite（volume 挂载）
-{T3}
+```
 
 ### 7.3 云上 Ollama 方案
 
