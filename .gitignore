@@ -75,3 +75,7 @@ static/video/*.mp4
 .env.*
 secrets.json
 data/points_log.json
+*.pptx
+*.docx
+*.mp4
+—Ú»‚≈›‚….mp4
