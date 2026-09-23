@@ -20,7 +20,7 @@
     <input type="date" id="fDate">
   </div>
   <button id="btnRefresh" class="btn-blue">刷新</button>
-  <button id="btnExport" class="btn-outline">导出 CSV</button>
+  <button id="btnExport" class="btn-outline">📥 导出 Excel</button>
   <span id="totalCount" class="total-count"></span>
 </div>
 
@@ -175,7 +175,7 @@ function closeModal() {
 
 document.getElementById('btnRefresh').onclick = () => loadOrders(1);
 document.getElementById('btnExport').onclick = () => {
-  window.open('/admin/api/orders/export', '_blank');
+  window.open('/admin/api/export/orders.xlsx', '_blank');
 };
 document.getElementById('fStatus').onchange = () => loadOrders(1);
 document.getElementById('fDate').onchange = () => loadOrders(1);

@@ -16,6 +16,9 @@ class SessionService:
         self._sessions = defaultdict(lambda: deque(maxlen=MAX_HISTORY * 2))
         # uid -> last_active_ts
         self._last_active = {}
+        self._recommend_history = {}
+        self._pending_message = {}  # uid -> bool（等待留言内容）
+        self._last_recommend = {}
         # uid -> [订单信息]（用于"一共多少钱"聚合）
         self._orders = defaultdict(list)
 
@@ -46,6 +49,7 @@ class SessionService:
         self._sessions[key].clear()
         self._last_active.pop(key, None)
         self._orders.pop(key, None)
+        self._last_recommend.pop(key, None)
 
     def _cleanup(self):
         """清理过期会话"""
@@ -57,6 +61,68 @@ class SessionService:
         for k in expired:
             self._sessions.pop(k, None)
             self._last_active.pop(k, None)
+
+    # ---------- 最近推荐（v3.9） ----------
+    def set_last_recommend(self, uid, text, items):
+        """记录最近一次推荐，供"就这个"接单"""
+        key = self._key(uid)
+        self._last_recommend[key] = {
+            'text': text,
+            'items': items or [],
+            'ts': time.time(),
+        }
+
+    def get_last_recommend(self, uid):
+        """读最近推荐，5 分钟过期"""
+        key = self._key(uid)
+        v = self._last_recommend.get(key)
+        if not v:
+            return None
+        if time.time() - v.get('ts', 0) > 300:
+            self._last_recommend.pop(key, None)
+            return None
+        return v
+
+    def clear_last_recommend(self, uid):
+        if not hasattr(self, '_last_recommend'):
+            return
+        self._last_recommend.pop(self._key(uid), None)
+
+    def add_recommend_history(self, uid, dish_names):
+        """记录一次推荐过的菜名，最多保留最近 10 个"""
+        if not hasattr(self, '_recommend_history'):
+            self._recommend_history = {}
+        key = self._key(uid)
+        if key not in self._recommend_history:
+            self._recommend_history[key] = []
+        for n in (dish_names or []):
+            if n and n not in self._recommend_history[key]:
+                self._recommend_history[key].append(n)
+        # 只留最近 10 个
+        self._recommend_history[key] = self._recommend_history[key][-10:]
+
+    def get_recommend_history(self, uid):
+        if not hasattr(self, '_recommend_history'):
+            return []
+        return list(self._recommend_history.get(self._key(uid), []))
+
+    def clear_recommend_history(self, uid):
+        if hasattr(self, '_recommend_history'):
+            self._recommend_history.pop(self._key(uid), None)
+
+    def set_pending_message(self, uid, flag=True):
+        if not hasattr(self, '_pending_message'):
+            self._pending_message = {}
+        self._pending_message[self._key(uid)] = bool(flag)
+
+    def is_pending_message(self, uid):
+        if not hasattr(self, '_pending_message'):
+            return False
+        return self._pending_message.get(self._key(uid), False)
+
+    def clear_pending_message(self, uid):
+        if hasattr(self, '_pending_message'):
+            self._pending_message.pop(self._key(uid), None)
 
     def add_order(self, uid, order):
         """记录本会话成功下单的订单"""

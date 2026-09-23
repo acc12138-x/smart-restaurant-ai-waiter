@@ -76,26 +76,33 @@ fetch('/api/menu')
     box.innerHTML = data.map(cat => `
       <section class="menu-group">
         <h2 class="menu-cat">${cat.category}</h2>
-        ${cat.items.map(item => `
-          <article class="dish">
-            <div class="dish-thumb">
-              <span>${item.emoji || '🍜'}</span>
-            </div>
-            <div class="dish-info">
-              <h3 class="dish-name">${item.name}</h3>
-              <p class="dish-desc">${item.desc}</p>
-            </div>
-            <div class="dish-right">
-              <span class="dish-price">${item.price}</span>
-              <button class="dish-add" data-name="${item.name}" data-price="${item.price}" type="button">+</button>
-            </div>
-          </article>
-        `).join('')}
+        ${cat.items.map(item => {
+          var sold = (item.stock !== null && item.stock !== undefined && item.stock <= 0);
+          var low = (item.stock !== null && item.stock !== undefined && item.stock > 0 && item.stock <= 5);
+          var cls = sold ? ' sold-out' : '';
+          var btn = sold
+            ? '<button class="dish-add" disabled type="button">售罄</button>'
+            : '<button class="dish-add" data-name="' + item.name + '" data-price="' + item.price + '" type="button">+</button>';
+          var tag = sold
+            ? '<span class="dish-tag out">售罄</span>'
+            : (low ? '<span class="dish-tag low">仅剩 ' + item.stock + '</span>' : '');
+          return '<article class="dish' + cls + '">' +
+            '<div class="dish-thumb"><span>' + (item.emoji || '🍜') + '</span></div>' +
+            '<div class="dish-info">' +
+              '<h3 class="dish-name">' + item.name + ' ' + tag + '</h3>' +
+              '<p class="dish-desc">' + item.desc + '</p>' +
+            '</div>' +
+            '<div class="dish-right">' +
+              '<span class="dish-price">' + item.price + '</span>' +
+              btn +
+            '</div>' +
+          '</article>';
+        }).join('')}
       </section>
     `).join('');
 
     // 绑定「+」按钮
-    box.querySelectorAll('.dish-add').forEach(btn => {
+    box.querySelectorAll('.dish-add:not([disabled])').forEach(btn => {
       btn.addEventListener('click', () => {
         window.Cart.add(btn.dataset.name, parseFloat(btn.dataset.price));
       });

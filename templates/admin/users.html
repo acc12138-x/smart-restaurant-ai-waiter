@@ -8,6 +8,7 @@
     <input type="text" id="fKeyword" placeholder="搜用户名 / 昵称 / UID" style="width:240px;">
   </div>
   <button id="btnSearch" class="btn-blue">搜索</button>
+  <button id="btnExportUsers" class="btn-outline">📥 导出 Excel</button>
   <span id="totalCount" class="total-count"></span>
 </div>
 
@@ -205,6 +206,10 @@ async function toggleDisabled(uid, disabled) {
 }
 
 document.getElementById('btnSearch').onclick = function() { loadUsers(1); };
+document.getElementById('btnExportUsers').onclick = function() {
+  window.open('/admin/api/export/users.xlsx', '_blank');
+};
+
 document.getElementById('fKeyword').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') loadUsers(1);
 });

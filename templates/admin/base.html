@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -12,10 +12,13 @@
     <div class="admin-brand">同盛祥<span>后台</span></div>
     <nav class="admin-nav">
       <a href="/admin/dashboard" class="{% if active=='dashboard' %}on{% endif %}">📊 数据总览</a>
+      <a href="/admin/live"      class="{% if active=='live' %}on{% endif %}">🔔 实时订单</a>
       <a href="/admin/orders"    class="{% if active=='orders' %}on{% endif %}">🧾 订单管理</a>
       <a href="/admin/chat-logs" class="{% if active=='chat' %}on{% endif %}">🤖 AI 记录</a>
       <a href="/admin/users"     class="{% if active=='users' %}on{% endif %}">👤 用户管理</a>
       <a href="/admin/kb"        class="{% if active=='kb' %}on{% endif %}">📚 知识库</a>
+      <a href="/admin/menu"      class="{% if active=='menu' %}on{% endif %}">📖 菜单管理</a>
+      <a href="/admin/hero-setting" class="{% if active=='hero' %}on{% endif %}">🎬 首页 Hero</a>
       <a href="/admin/messages"  class="{% if active=='messages' %}on{% endif %}">💬 留言</a>
       <a href="/admin/tables"    class="{% if active=='tables' %}on{% endif %}">🔳 桌码</a>
       <a href="/admin/logs"      class="{% if active=='logs' %}on{% endif %}">📝 操作日志</a>

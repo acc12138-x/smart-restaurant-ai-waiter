@@ -19,10 +19,7 @@
   html.pre-elder body { visibility: hidden; }
 </style>
 
-<!-- 字体：Inter（拉丁）+ 中文系统字体回退 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<!-- 字体：用系统字体（移除 Google Fonts，国内提速） -->
 
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -53,13 +50,9 @@
     <svg viewBox="0 0 24 24"><path d="M4 4h16v2H4zm0 5h16v2H4zm0 5h10v2H4zm0 5h10v2H4z"/></svg>
     <span>菜单</span>
   </a>
-  <a class="tab {% if active=='location' %}on{% endif %}" href="/location">
-    <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
-    <span>门店</span>
-  </a>
       <a class="tab {% if active=='chat' %}on{% endif %}" href="/chat">
     <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
-    <span>问答</span>
+    <span>AI 店长</span>
   </a>
     <a class="tab {% if active=='profile' %}on{% endif %}" href="/profile">
   <svg viewBox="0 0 24 24"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z"/></svg>
@@ -68,6 +61,7 @@
 </nav>
 
 <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/hero.js') }}"></script>
 <script src="{{ url_for('static', filename='js/auth-client.js') }}"></script>
 <script src="{{ url_for('static', filename='js/track.js') }}"></script>
 {% block script %}{% endblock %}

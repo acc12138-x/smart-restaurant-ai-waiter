@@ -1,52 +1,77 @@
-﻿# Python
+# ========== Python ==========
 __pycache__/
 *.py[cod]
+*$py.class
 *.so
 .Python
+*.egg-info/
+dist/
+build/
+
+# ========== 虚拟环境 ==========
 venv/
-venv312/
+.venv/
 env/
+ENV/
+venv312/
+
+# ========== 测试 ==========
 .pytest_cache/
 .coverage
 htmlcov/
+.tox/
 
-# IDE
+# ========== IDE ==========
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.DS_Store
 
-# 数据库（本地数据，不进版本控制）
+# ========== 数据库 ==========
 data/app.db
-data/app.db-shm
-data/app.db-wal
-data/*.json.tmp
+data/app.db-*
 data/backup/
-data/*.bak*
 
-# 向量库（运行时生成）
+# ========== 运行时数据 ==========
+data/members.json
+data/orders.json
+data/message.json
+data/events.json
+data/rag_logs.json
+
+# ========== 日志 ==========
+logs/*.log
+logs/*.log.*
+logs/*.bak*
+
+# ========== 向量库（重新构建） ==========
 vector_store/*
 !vector_store/.gitkeep
 
-# 日志
-logs/*.log
-logs/*.log.*
-
-# 备份/临时文件
+# ========== 备份文件 ==========
 *.bak
 *.bak_*
 *.bak-*
+*.bak.*
+data/*.bak*
+
+# ========== 临时脚本（以 _ 开头） ==========
 _*.py
+_*.txt
 
-# 大文件（交付物，不进 git）
-*.pptx
-*.mp4
-*.pdf
-*.docx
-*.xlsx
+# ========== 上传的视频（大文件） ==========
+static/video/hero/*.mp4
+static/video/hero/*.webm
+static/video/hero/*.mov
+static/video/*.mp4
 
-# OS
-.DS_Store
-Thumbs.db
-*.bak[0-9]
-*.bak[0-9]
+# ========== 上传的帧图 ==========
+# static/frames/*.jpg  ← 这行注释掉，如果想提交帧图就留着
+
+# ========== 邮件 / 密钥 ==========
+.env
+.env.*
+secrets.json
+data/points_log.json

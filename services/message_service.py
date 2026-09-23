@@ -20,10 +20,19 @@ class MessageService:
         if len(name) > self.MAX_NAME_LEN:
             raise BizError(f'称呼超过 {self.MAX_NAME_LEN} 字')
 
-        return message_repo.create({
+        result = message_repo.create({
             'name': name,
             'content': content,
         })
+
+        # v3.8 企业微信通知（异步）
+        try:
+            from services.notify_service import notify_service
+            notify_service.notify_new_message(result)
+        except Exception:
+            pass
+
+        return result
 
     def get_all(self):
         return message_repo.get_all()

@@ -11,28 +11,52 @@
   <div class="skeleton-list"></div>
 </div>
 
-<!-- 登录 / 注册 弹窗 -->
+<!-- 登录 / 注册 弹窗（美化版） -->
 <div class="modal auth-modal" id="authModal">
-  <div class="modal-panel" style="width:min(400px,92vw);">
-    <div class="modal-head">
-      <h3 id="authTitle">登录</h3>
-      <button class="modal-close" onclick="closeAuth()">×</button>
+  <div class="modal-panel auth-panel">
+
+    <button class="auth-close" onclick="closeAuth()" aria-label="关闭">×</button>
+
+    <div class="auth-head">
+      <div class="auth-logo">🏮</div>
+      <h3 class="auth-title" id="authTitle">欢迎回来</h3>
+      <p class="auth-sub" id="authSub">登录后查看积分、兑换奖励、同步订单</p>
     </div>
-    <div class="modal-body" style="padding:20px 22px;">
-      <label class="nf-label">用户名</label>
-      <input type="text" id="authUser" class="nf-input" placeholder="3-20 位" maxlength="20">
-      <label class="nf-label" style="margin-top:14px;">密码</label>
-      <input type="password" id="authPass" class="nf-input" placeholder="至少 6 位" maxlength="30">
-      <div id="authRegField" style="display:none;">
-        <label class="nf-label" style="margin-top:14px;">昵称（选填）</label>
-        <input type="text" id="authNick" class="nf-input" placeholder="怎么称呼你" maxlength="20">
+
+    <div class="auth-tabs" role="tablist">
+      <button class="auth-tab active" data-tab="login" role="tab">登录</button>
+      <button class="auth-tab" data-tab="register" role="tab">注册</button>
+      <span class="auth-tab-slider" id="tabSlider"></span>
+    </div>
+
+    <div class="auth-body">
+      <div class="auth-field">
+        <span class="field-icon">👤</span>
+        <input type="text" id="authUser" placeholder="用户名（3-20 位）"
+               autocomplete="username" maxlength="20">
       </div>
+
+      <div class="auth-field">
+        <span class="field-icon">🔒</span>
+        <input type="password" id="authPass" placeholder="密码（至少 6 位）"
+               autocomplete="current-password" maxlength="30">
+      </div>
+
+      <div class="auth-field" id="authRegField" style="display:none;">
+        <span class="field-icon">✨</span>
+        <input type="text" id="authNick" placeholder="昵称（选填）"
+               autocomplete="nickname" maxlength="20">
+      </div>
+
       <p id="authMsg" class="auth-msg"></p>
+
+      <button class="auth-submit" id="authSubmit" type="button">登录</button>
+
+      <a href="/admin/login" class="auth-staff-link">
+        <span>🔑</span> 我是店长
+      </a>
     </div>
-    <div class="modal-foot" style="flex-direction:column;gap:10px;align-items:stretch;">
-      <button class="btn-blue" id="authSubmit" style="width:100%;">登录</button>
-      <button class="btn-outline" id="authSwitch" style="width:100%;">没有账号？去注册</button>
-    </div>
+
   </div>
 </div>
 
@@ -43,14 +67,27 @@
   var box = document.getElementById('profileBox');
   var authMode = 'login';  // 'login' | 'register'
 
+  function switchTab(mode){
+    authMode = mode;
+    var isReg = mode === 'register';
+    document.getElementById('authTitle').textContent = isReg ? '新用户注册' : '欢迎回来';
+    document.getElementById('authSub').textContent = isReg
+      ? '注册即送 10 积分，消费可累积'
+      : '登录后查看积分、兑换奖励、同步订单';
+    document.getElementById('authSubmit').textContent = isReg ? '注册并登录' : '登录';
+    document.getElementById('authRegField').style.display = isReg ? '' : 'none';
+    document.querySelectorAll('.auth-tab').forEach(function(t){
+      t.classList.toggle('active', t.dataset.tab === mode);
+    });
+    var slider = document.getElementById('tabSlider');
+    if (slider){
+      slider.style.transform = isReg ? 'translateX(100%)' : 'translateX(0)';
+    }
+  }
+
   // ---------- 打开登录弹窗 ----------
   window.openAuth = function(mode){
-    authMode = mode || 'login';
-    var isReg = authMode === 'register';
-    document.getElementById('authTitle').textContent = isReg ? '注册' : '登录';
-    document.getElementById('authSubmit').textContent = isReg ? '注册并登录' : '登录';
-    document.getElementById('authSwitch').textContent = isReg ? '已有账号？去登录' : '没有账号？去注册';
-    document.getElementById('authRegField').style.display = isReg ? '' : 'none';
+    switchTab(mode || 'login');
     document.getElementById('authMsg').textContent = '';
     document.getElementById('authUser').value = '';
     document.getElementById('authPass').value = '';
@@ -59,16 +96,19 @@
     setTimeout(function(){ document.getElementById('authUser').focus(); }, 100);
   };
 
+  // Tab 点击
+  document.querySelectorAll('.auth-tab').forEach(function(tab){
+    tab.addEventListener('click', function(){
+      switchTab(tab.dataset.tab);
+    });
+  });
+
   window.closeAuth = function(){
     document.getElementById('authModal').classList.remove('show');
   };
 
   document.getElementById('authModal').onclick = function(e){
     if (e.target.id === 'authModal') closeAuth();
-  };
-
-  document.getElementById('authSwitch').onclick = function(){
-    openAuth(authMode === 'login' ? 'register' : 'login');
   };
 
   document.getElementById('authSubmit').onclick = submitAuth;
@@ -268,6 +308,10 @@
     }
   }
 
+  var __allOrders = [];        // 缓存全部订单
+  var __orderPage = 1;         // 当前页
+  var ORDER_PAGE_SIZE = 5;     // 每页 5 条
+
   function loadOrders(){
     var listBox = document.getElementById('orderList');
     if (!listBox) return;
@@ -288,69 +332,115 @@
           listBox.innerHTML = '<p class="empty">' + (res && res.msg || '加载失败') + '</p>';
           return;
         }
-        var orders = res.data || [];
-        if (!orders.length) {
-          listBox.innerHTML = '<p class="empty">还没有订单，去菜单看看</p>';
-          return;
-        }
-        listBox.innerHTML = orders.map(function(o){
-          return '<div class="pf-order">' +
-            '<div class="pf-order-head">' +
-              '<span class="pf-order-id">' + o.id + '</span>' +
-              '<span class="pf-order-status ' + o.status + '">' + statusText(o.status) + '</span>' +
-            '</div>' +
-            '<div class="pf-order-items">' +
-              o.items.map(function(it){ return '<span>' + it.name + ' × ' + it.qty + '</span>'; }).join('') +
-            '</div>' +
-            '<div class="pf-order-foot">' +
-              '<span>' + o.created_at + '</span>' +
-              '<b>¥' + o.total + '</b>' +
-            '</div>' +
-            '<div class="pf-order-actions">' +
-              ((o.status === 'pending' || o.status === 'paid')
-                ? '<button class="pf-order-cancel" data-id="' + o.id + '">取消订单</button>'
-                : '') +
-              '<a href="/order/' + o.id + '" class="pf-order-track">查看跟踪 →</a>' +
-            '</div>' +
-          '</div>';
-        }).join('');
-
-        // 绑定"取消订单"按钮
-        listBox.querySelectorAll('.pf-order-cancel').forEach(function(btn){
-          btn.onclick = async function(){
-            var oid = btn.dataset.id;
-            if (!confirm('确定取消订单 ' + oid + '？\n取消后不可恢复。')) return;
-            btn.disabled = true;
-            btn.textContent = '取消中…';
-            try {
-              var token = localStorage.getItem('tsx-token') || '';
-              var headers = {'Content-Type': 'application/json'};
-              if (token) headers['Authorization'] = 'Bearer ' + token;
-              var r = await fetch('/api/order/' + oid + '/cancel', {
-                method: 'POST', headers: headers
-              });
-              var d = await r.json();
-              if (d.code === 0) {
-                alert('已取消');
-                renderProfile();
-              } else {
-                alert(d.msg || '取消失败');
-                btn.disabled = false;
-                btn.textContent = '取消订单';
-              }
-            } catch (e) {
-              alert('网络错误');
-              btn.disabled = false;
-              btn.textContent = '取消订单';
-            }
-          };
-        });
+        __allOrders = res.data || [];
+        __orderPage = 1;
+        renderOrderPage();
       })
       .catch(function(e){
         if (e.message !== 'expired') {
           listBox.innerHTML = '<p class="empty">加载失败</p>';
         }
       });
+  }
+
+  function renderOrderPage(){
+    var listBox = document.getElementById('orderList');
+    if (!listBox) return;
+
+    var total = __allOrders.length;
+    if (!total){
+      listBox.innerHTML = '<p class="empty">还没有订单，去菜单看看</p>';
+      return;
+    }
+
+    var pages = Math.max(1, Math.ceil(total / ORDER_PAGE_SIZE));
+    __orderPage = Math.max(1, Math.min(__orderPage, pages));
+    var start = (__orderPage - 1) * ORDER_PAGE_SIZE;
+    var pageItems = __allOrders.slice(start, start + ORDER_PAGE_SIZE);
+
+    var ordersHtml = pageItems.map(function(o){
+      return '<div class="pf-order">' +
+        '<div class="pf-order-head">' +
+          '<span class="pf-order-id">' + o.id + '</span>' +
+          '<span class="pf-order-status ' + o.status + '">' + statusText(o.status) + '</span>' +
+        '</div>' +
+        '<div class="pf-order-items">' +
+          (o.items || []).map(function(it){
+            return '<span>' + it.name + ' × ' + it.qty + '</span>';
+          }).join('') +
+        '</div>' +
+        '<div class="pf-order-foot">' +
+          '<span>' + o.created_at + '</span>' +
+          '<b>¥' + o.total + '</b>' +
+        '</div>' +
+        '<div class="pf-order-actions">' +
+          ((o.status === 'pending' || o.status === 'paid')
+            ? '<button class="pf-order-cancel" data-id="' + o.id + '">取消订单</button>'
+            : '') +
+          '<a href="/order/' + o.id + '" class="pf-order-track">查看跟踪 →</a>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    var pagerHtml = '';
+    if (pages > 1){
+      pagerHtml =
+        '<div class="pf-order-pager">' +
+          '<button class="pf-pager-btn" data-page="prev" ' +
+            (__orderPage <= 1 ? 'disabled' : '') + '>‹ 上一页</button>' +
+          '<span class="pf-pager-info">' +
+            __orderPage + ' / ' + pages + '（共 ' + total + ' 单）' +
+          '</span>' +
+          '<button class="pf-pager-btn" data-page="next" ' +
+            (__orderPage >= pages ? 'disabled' : '') + '>下一页 ›</button>' +
+        '</div>';
+    } else {
+      pagerHtml = '<p class="pf-pager-info single">共 ' + total + ' 单</p>';
+    }
+
+    listBox.innerHTML = ordersHtml + pagerHtml;
+
+    // 绑定取消按钮
+    listBox.querySelectorAll('.pf-order-cancel').forEach(function(btn){
+      btn.onclick = async function(){
+        var oid = btn.dataset.id;
+        if (!confirm('确定取消订单 ' + oid + '？\n取消后不可恢复。')) return;
+        btn.disabled = true;
+        btn.textContent = '取消中…';
+        try {
+          var token = localStorage.getItem('tsx-token') || '';
+          var headers = {'Content-Type': 'application/json'};
+          if (token) headers['Authorization'] = 'Bearer ' + token;
+          var r = await fetch('/api/order/' + oid + '/cancel', {
+            method: 'POST', headers: headers
+          });
+          var d = await r.json();
+          if (d.code === 0) {
+            alert('已取消');
+            loadOrders();
+          } else {
+            alert(d.msg || '取消失败');
+            btn.disabled = false;
+            btn.textContent = '取消订单';
+          }
+        } catch (e) {
+          alert('网络错误');
+          btn.disabled = false;
+          btn.textContent = '取消订单';
+        }
+      };
+    });
+
+    // 绑定分页按钮
+    listBox.querySelectorAll('.pf-pager-btn').forEach(function(btn){
+      btn.onclick = function(){
+        if (btn.disabled) return;
+        if (btn.dataset.page === 'prev') __orderPage -= 1;
+        else __orderPage += 1;
+        renderOrderPage();
+        listBox.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      };
+    });
   }
 
   function statusText(s){

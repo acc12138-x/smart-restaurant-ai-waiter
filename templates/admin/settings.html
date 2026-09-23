@@ -1,0 +1,398 @@
+{% extends "admin/base.html" %}
+{% set active = 'settings' %}
+{% block page_title %}系统设置{% endblock %}
+{% block content %}
+
+<form id="settingsForm" class="settings-form">
+
+  <!-- ============ AI 大模型 ============ -->
+  <section class="settings-group">
+    <h2 class="settings-group-title">
+      <span class="sg-icon">🤖</span> AI 大模型
+    </h2>
+    <p class="settings-group-desc">选择本地 Ollama 或远程 OpenAI 兼容 API。切换后立即生效，不用重启。</p>
+
+    <div class="settings-row">
+      <label class="settings-label">使用方式</label>
+      <div class="settings-input">
+        <select name="llm_provider" id="llmProvider">
+          <option value="local">本地 Ollama（免费，慢 3-5 秒）</option>
+          <option value="remote">远程 API（快 1 秒，按量付费）</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <label class="settings-label">启用 LLM 语义理解</label>
+      <div class="settings-input">
+        <label class="switch">
+          <input type="checkbox" name="llm_enabled" id="llmEnabled">
+          <span class="switch-slider"></span>
+          <span class="switch-text">关掉则只走规则匹配</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ---------- 本地字段 ---------- -->
+    <div class="settings-row local-only" id="ollamaModelRow">
+      <label class="settings-label">Ollama 对话模型</label>
+      <div class="settings-input">
+        <div class="settings-input-inline">
+          <input type="text" name="ollama_model" id="ollamaModel"
+                 placeholder="modelscope.cn/Qwen/Qwen3-4B-GGUF:latest" maxlength="80">
+          <button type="button" id="testOllama" class="btn-outline">测试</button>
+        </div>
+        <p class="settings-hint">用 <code>ollama list</code> 查看实际模型名</p>
+      </div>
+    </div>
+
+    <div class="settings-row local-only" id="ollamaEmbedRow">
+      <label class="settings-label">Ollama 嵌入模型</label>
+      <div class="settings-input">
+        <input type="text" name="ollama_embed_model" id="ollamaEmbed"
+               placeholder="bge-m3" maxlength="80">
+        <p class="settings-hint">RAG 检索用。改动后请到 <a href="/admin/kb" style="color:#3B82F6;">知识库页</a> 点「保存并重建」重建向量库，否则检索会报错</p>
+      </div>
+    </div>
+
+    <!-- ---------- 远程字段 ---------- -->
+    <div class="settings-row remote-only" id="apiBaseUrlRow">
+      <label class="settings-label">API Base URL</label>
+      <div class="settings-input">
+        <input type="text" name="api_base_url" id="apiBaseUrl"
+               placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
+               autocomplete="off">
+        <p class="settings-hint">OpenAI 兼容路径，通常以 /v1 结尾</p>
+      </div>
+    </div>
+
+    <div class="settings-row remote-only" id="apiKeyRow">
+      <label class="settings-label">API Key</label>
+      <div class="settings-input">
+        <input type="text" name="api_key" id="apiKey"
+               placeholder="sk-xxxxx（留空则不修改）" autocomplete="off">
+        <p class="settings-hint" id="apiKeyHint"></p>
+      </div>
+    </div>
+
+    <div class="settings-row remote-only" id="apiModelRow">
+      <label class="settings-label">模型名</label>
+      <div class="settings-input">
+        <div class="settings-input-inline">
+          <input type="text" name="api_model" id="apiModel"
+                 placeholder="qwen3.7-plus" maxlength="60">
+          <button type="button" id="testRemoteApi" class="btn-outline">测试</button>
+        </div>
+        <p class="settings-hint">如 qwen-plus / qwen-max / deepseek-chat</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 门店信息 ============ -->
+  <section class="settings-group">
+    <h2 class="settings-group-title"><span class="sg-icon">🏪</span> 门店信息</h2>
+    <p class="settings-group-desc">AI 回答"门店在哪里""电话多少"时会用这些信息。</p>
+
+    <div class="settings-row">
+      <label class="settings-label">店名</label>
+      <div class="settings-input"><input type="text" name="shop_name" maxlength="40"></div>
+    </div>
+    <div class="settings-row">
+      <label class="settings-label">地址</label>
+      <div class="settings-input"><input type="text" name="shop_address" maxlength="100"></div>
+    </div>
+    <div class="settings-row">
+      <label class="settings-label">电话</label>
+      <div class="settings-input"><input type="text" name="shop_phone" maxlength="30"></div>
+    </div>
+    <div class="settings-row">
+      <label class="settings-label">营业时间</label>
+      <div class="settings-input"><input type="text" name="shop_hours" maxlength="60"></div>
+    </div>
+    <div class="settings-row">
+      <label class="settings-label">特别提示</label>
+      <div class="settings-input">
+        <input type="text" name="shop_notice" maxlength="100" placeholder="如：深夜 21:00 后进店送热汤">
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 积分 ============ -->
+  <section class="settings-group">
+    <h2 class="settings-group-title"><span class="sg-icon">🎁</span> 积分规则</h2>
+
+    <div class="settings-row">
+      <label class="settings-label">消费积分倍率</label>
+      <div class="settings-input">
+        <input type="number" name="points_rate" min="0" max="100" step="0.1" style="width:120px;">
+        <span class="settings-hint inline">每 1 元送 N 分</span>
+      </div>
+    </div>
+    <div class="settings-row">
+      <label class="settings-label">注册赠送积分</label>
+      <div class="settings-input">
+        <input type="number" name="points_signup_bonus" min="0" max="10000" step="1" style="width:120px;">
+        <span class="settings-hint inline">新用户注册送 N 分</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 开关 ============ -->
+  <section class="settings-group">
+    <h2 class="settings-group-title"><span class="sg-icon">🔧</span> 功能开关</h2>
+
+    <div class="settings-row">
+      <label class="settings-label">显示 Emoji</label>
+      <div class="settings-input">
+        <label class="switch">
+          <input type="checkbox" name="emoji_enabled">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="settings-row">
+      <label class="settings-label">启用 AI 主动推荐</label>
+      <div class="settings-input">
+        <label class="switch">
+          <input type="checkbox" name="recommend_enabled">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 通知 ============ -->
+  <section class="settings-group">
+    <h2 class="settings-group-title"><span class="sg-icon">🔔</span> 消息通知</h2>
+    <p class="settings-group-desc">新订单、新留言推送到企业微信群机器人。</p>
+
+    <div class="settings-row">
+      <label class="settings-label">启用通知</label>
+      <div class="settings-input">
+        <label class="switch">
+          <input type="checkbox" name="notification_enabled">
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="settings-row">
+      <label class="settings-label">企业微信 Webhook</label>
+      <div class="settings-input">
+        <div class="settings-input-inline">
+          <input type="text" name="wecom_webhook" id="wecomWebhook"
+                 placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx" autocomplete="off">
+          <button type="button" id="testNotify" class="btn-outline">测试通知</button>
+        </div>
+        <p class="settings-hint" id="wecomHint"></p>
+      </div>
+    </div>
+  </section>
+
+  <div class="settings-save-bar">
+    <button type="submit" class="btn-blue" id="saveBtn">保存设置</button>
+    <span id="saveMsg" class="settings-save-msg"></span>
+  </div>
+
+</form>
+
+{% endblock %}
+
+{% block script %}
+<script>
+(function(){
+  var form = document.getElementById('settingsForm');
+  var saveBtn = document.getElementById('saveBtn');
+  var saveMsg = document.getElementById('saveMsg');
+  var llmProvider = document.getElementById('llmProvider');
+  var llmEnabled = document.getElementById('llmEnabled');
+  var apiKey = document.getElementById('apiKey');
+  var apiKeyHint = document.getElementById('apiKeyHint');
+  var wecomWebhook = document.getElementById('wecomWebhook');
+  var wecomHint = document.getElementById('wecomHint');
+
+  var maskedApiKey = '';
+  var maskedWebhook = '';
+
+  function toggleLlmFields(){
+    var isRemote = llmProvider.value === 'remote';
+    var remotes = document.querySelectorAll('.remote-only');
+    var locals = document.querySelectorAll('.local-only');
+    for (var i = 0; i < remotes.length; i++) remotes[i].style.display = isRemote ? '' : 'none';
+    for (var j = 0; j < locals.length; j++) locals[j].style.display = isRemote ? 'none' : '';
+  }
+  llmProvider.addEventListener('change', toggleLlmFields);
+
+  function setCheckbox(name, checked){
+    var el = form.querySelector('input[name="' + name + '"]');
+    if (el) el.checked = !!checked;
+  }
+  function setInput(name, value){
+    var el = form.querySelector('[name="' + name + '"]');
+    if (el) el.value = value == null ? '' : value;
+  }
+
+  async function loadSettings(){
+    try {
+      var r = await fetch('/admin/api/settings');
+      var d = await r.json();
+      if (d.code !== 0){ saveMsg.textContent = '加载失败'; return; }
+      var cfg = d.data;
+
+      llmProvider.value = cfg.llm_provider || 'local';
+      llmEnabled.checked = (cfg.llm_enabled === 'true');
+
+      maskedApiKey = cfg.api_key_masked || '';
+      if (maskedApiKey){
+        apiKey.placeholder = '当前已设置：' + maskedApiKey + '（留空不改）';
+        apiKeyHint.textContent = '想换 Key 就填新的，不改就留空';
+      } else {
+        apiKey.placeholder = 'sk-xxxxx';
+        apiKeyHint.textContent = '从对应服务商控制台获取';
+      }
+      setInput('api_base_url', cfg.api_base_url);
+      setInput('api_model', cfg.api_model);
+      setInput('ollama_model', cfg.ollama_model);
+      setInput('ollama_embed_model', cfg.ollama_embed_model);
+
+      setInput('shop_name', cfg.shop_name);
+      setInput('shop_address', cfg.shop_address);
+      setInput('shop_phone', cfg.shop_phone);
+      setInput('shop_hours', cfg.shop_hours);
+      setInput('shop_notice', cfg.shop_notice);
+
+      setInput('points_rate', cfg.points_rate);
+      setInput('points_signup_bonus', cfg.points_signup_bonus);
+
+      setCheckbox('emoji_enabled', cfg.emoji_enabled === 'true');
+      setCheckbox('recommend_enabled', cfg.recommend_enabled === 'true');
+      setCheckbox('notification_enabled', cfg.notification_enabled === 'true');
+
+      maskedWebhook = cfg.wecom_webhook_masked || '';
+      if (maskedWebhook){
+        wecomWebhook.placeholder = '当前已设置：' + maskedWebhook + '（留空不改）';
+        wecomHint.textContent = '想换 Webhook 就填新的，不改就留空';
+      } else {
+        wecomWebhook.placeholder = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx';
+        wecomHint.textContent = '企业微信群 → 群机器人 → 添加 → 复制 Webhook 地址';
+      }
+
+      toggleLlmFields();
+    } catch(e){
+      saveMsg.textContent = '加载失败：' + e.message;
+    }
+  }
+
+  form.onsubmit = async function(e){
+    e.preventDefault();
+    saveBtn.disabled = true;
+    saveBtn.textContent = '保存中…';
+    saveMsg.textContent = '';
+
+    var data = {
+      llm_provider: llmProvider.value,
+      llm_enabled: llmEnabled.checked ? 'true' : 'false',
+      api_base_url: form.querySelector('[name="api_base_url"]').value.trim(),
+      api_key: apiKey.value.trim(),
+      api_model: form.querySelector('[name="api_model"]').value.trim(),
+      ollama_model: form.querySelector('[name="ollama_model"]').value.trim(),
+      ollama_embed_model: form.querySelector('[name="ollama_embed_model"]').value.trim(),
+      shop_name: form.querySelector('[name="shop_name"]').value.trim(),
+      shop_address: form.querySelector('[name="shop_address"]').value.trim(),
+      shop_phone: form.querySelector('[name="shop_phone"]').value.trim(),
+      shop_hours: form.querySelector('[name="shop_hours"]').value.trim(),
+      shop_notice: form.querySelector('[name="shop_notice"]').value.trim(),
+      points_rate: form.querySelector('[name="points_rate"]').value,
+      points_signup_bonus: form.querySelector('[name="points_signup_bonus"]').value,
+      emoji_enabled: form.querySelector('[name="emoji_enabled"]').checked ? 'true' : 'false',
+      recommend_enabled: form.querySelector('[name="recommend_enabled"]').checked ? 'true' : 'false',
+      notification_enabled: form.querySelector('[name="notification_enabled"]').checked ? 'true' : 'false',
+      wecom_webhook: wecomWebhook.value.trim()
+    };
+
+    try {
+      var r = await fetch('/admin/api/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+      var d = await r.json();
+      if (d.code === 0){
+        saveMsg.style.color = '#059669';
+        saveMsg.textContent = '✓ ' + (d.msg || '已保存');
+        apiKey.value = '';
+        wecomWebhook.value = '';
+        setTimeout(loadSettings, 400);
+      } else {
+        saveMsg.style.color = '#DC2626';
+        saveMsg.textContent = '✗ ' + (d.msg || '保存失败');
+      }
+    } catch (err){
+      saveMsg.style.color = '#DC2626';
+      saveMsg.textContent = '✗ 网络错误';
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = '保存设置';
+    }
+  };
+
+  document.getElementById('testOllama').onclick = async function(){
+    var name = document.getElementById('ollamaModel').value.trim();
+    if (!name){ alert('先填模型名'); return; }
+    var btn = this, orig = btn.textContent;
+    btn.disabled = true; btn.textContent = '测试中…';
+    try {
+      var r = await fetch('/admin/api/test_ollama', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({name: name})
+      });
+      var d = await r.json();
+      alert((d.code === 0 ? '✓ ' : '✗ ') + (d.msg || '未知结果'));
+    } catch(e){ alert('✗ 网络错误'); }
+    finally { btn.disabled = false; btn.textContent = orig; }
+  };
+
+  document.getElementById('testRemoteApi').onclick = async function(){
+    var base_url = document.getElementById('apiBaseUrl').value.trim();
+    var key = document.getElementById('apiKey').value.trim();
+    var model = document.getElementById('apiModel').value.trim();
+    if (!base_url || !key || !model){
+      alert('base_url / key / model 都要填');
+      return;
+    }
+    var btn = this, orig = btn.textContent;
+    btn.disabled = true; btn.textContent = '测试中…';
+    try {
+      var r = await fetch('/admin/api/test_remote_api', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({base_url: base_url, key: key, model: model})
+      });
+      var d = await r.json();
+      alert((d.code === 0 ? '✓ ' : '✗ ') + (d.msg || '未知结果'));
+    } catch(e){ alert('✗ 网络错误'); }
+    finally { btn.disabled = false; btn.textContent = orig; }
+  };
+
+  // 测试通知
+  var testNotifyBtn = document.getElementById('testNotify');
+  if (testNotifyBtn){
+    testNotifyBtn.onclick = async function(){
+      var btn = this, orig = btn.textContent;
+      btn.disabled = true; btn.textContent = '发送中…';
+      try {
+        var r = await fetch('/admin/api/test_notify', {method: 'POST'});
+        var d = await r.json();
+        alert((d.code === 0 ? '✓ ' : '✗ ') + (d.msg || '未知结果'));
+      } catch(e){
+        alert('✗ 网络错误');
+      } finally {
+        btn.disabled = false; btn.textContent = orig;
+      }
+    };
+  }
+
+  loadSettings();
+})();
+</script>
+{% endblock %}

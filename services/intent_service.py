@@ -99,6 +99,10 @@ def classify_intent(text: str, history: str = '') -> dict:
     if any(k in t for k in cancel_all_kw):
         return {'intent': 'cancel_all', 'items': []}
 
+    # 极短"来一个/来两个/再来一个" → 弱下单（从历史找菜）
+    if re.match(r'^\s*再?[来要]\s*[一两个三四五]\s*[个份份]?\s*$', t):
+        return {'intent': 'place_order', 'items': []}
+
     # 极短"要X"句式：要 / 要大份 / 要小份 / 要一份 / 要个 等
     # 排除问价格类（要多少、要啥、要什么）
     if len(t) <= 3 and t.startswith('要'):
@@ -125,6 +129,25 @@ def classify_intent(text: str, history: str = '') -> dict:
                                          '能取消吗', '怎么退')):
                 return {'intent': 'cancel_order', 'items': []}
 
+    # ============ 消息本身就是完整菜名 → 直接下单 ============
+    # 例："优质羊肉泡馍" "冰峰汽水" "糖蒜(整头)"
+    try:
+        from services.menu_service import menu_service
+        msg_clean = t.strip()
+        # 去掉末尾语气词
+        msg_clean = re.sub(r'[吗呢吧啊呀哦嘛]$', '', msg_clean).strip()
+        if len(msg_clean) >= 2:
+            for dish in menu_service.get_flat():
+                # 完全相等 → place_order
+                if msg_clean == dish['name']:
+                    return {'intent': 'place_order', 'items': []}
+                # 简名完全匹配（去括号后）
+                simple = dish['name'].split('(')[0].split('（')[0].strip()
+                if simple == msg_clean:
+                    return {'intent': 'place_order', 'items': []}
+    except Exception:
+        pass
+
     # ============ 点菜优先级最高 ============
     # 1) 通用句式：来/点/要/买 + 数量 + 量词（任意数字）
     #    例："来十份羊肉泡馍" "点2个冰峰" "要两碗泡馍"
@@ -140,8 +163,11 @@ def classify_intent(text: str, history: str = '') -> dict:
         return {'intent': 'place_order', 'items': []}
 
     # 4) 传统关键词（兜底）
-    order_kw = ['我要', '来一', '来两', '来三', '点一', '点两', '点三',
-                '要一', '要两', '要三', '给我', '打包', '下单',
+    order_kw = ['我要', '还要', '还要个', '再来', '再要',
+                '来一', '来两', '来三', '来份', '来个', '来份',
+                '点一', '点两', '点三', '点份', '点个',
+                '要一', '要两', '要三', '要份', '要个',
+                '给我', '打包', '下单',
                 '再要', '再来', '再点', '再加',
                 '添加', '加上']
     if any(k in t for k in order_kw):
@@ -153,9 +179,40 @@ def classify_intent(text: str, history: str = '') -> dict:
     if any(k in t for k in total_kw) and ('钱' in t or '元' in t or '多少' in t):
         return {'intent': 'query_total', 'items': []}
 
+    # ============ 留言（v3.9）============
+    msg_kw = ['留言', '留个言', '留句话', '给老店留', '给老板留', '给店长留',
+              '反馈', '建议', '投诉', '意见']
+    # 排除"给XX留言"其实是菜名的（极少见，简单处理）
+    if any(k in t for k in msg_kw):
+        return {'intent': 'leave_message', 'items': []}
+
+    # ============ 接受/拒绝推荐（v3.9，放推荐之前）============
+    accept_kw = ['就这个', '就要这个', '就要它', '就它', '就那个',
+                 '就要那个', '这个吧', '那个吧',
+                 '就要你推荐', '就要你推荐的', '就你推荐', '就你推荐的',
+                 '你推荐的这个', '推荐的这个',
+                 '就按你说的', '按你说的来', '就按你推荐',
+                 '来这个', '要这个', '点这个', '这个可以']
+    if any(k in t for k in accept_kw):
+        return {'intent': 'accept_recommend', 'items': []}
+
+    reject_kw = ['不要这个', '不想要这个', '换一个', '换个', '换别的',
+                 '来点别的', '推荐别的', '再推荐', '重新推荐',
+                 '不喜欢这个', '这个不好']
+    if any(k in t for k in reject_kw):
+        return {'intent': 'reject_recommend', 'items': []}
+
+    # 推荐（放菜单之前，因为"推荐"要单独识别）
+    recommend_kw = ['推荐', '随便', '都行', '无所谓', '吃啥', '有啥',
+                    '有什么', '有什么好吃', '来点', '看着办', '你选',
+                    '你帮我', '你决定', '帮我选', '帮我点', '什么好吃',
+                    '招牌是啥', '特色是啥']
+    if any(k in t for k in recommend_kw):
+        return {'intent': 'recommend', 'items': []}
+
     # 菜单/价格
     menu_kw = ['多少钱', '价格', '几块', '多少元', '什么价', '有吗',
-               '有没有', '菜单', '推荐', '好吃', '招牌']
+               '有没有', '菜单', '好吃', '招牌']
     if any(k in t for k in menu_kw):
         return {'intent': 'query_menu', 'items': []}
 

@@ -116,3 +116,38 @@ CREATE TABLE IF NOT EXISTS points_log (
     created_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_points_uid ON points_log(uid);
+-- 系统设置（v3.7）
+CREATE TABLE IF NOT EXISTS settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT,
+    updated_at  TEXT
+);
+
+-- 对话历史（v3.8，跨会话持久化）
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    uid         TEXT,
+    role        TEXT NOT NULL,
+    content     TEXT NOT NULL,
+    created_at  TEXT,
+    ts          REAL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_sessions_uid ON chat_sessions(uid, id);
+
+-- 应用日志（v3.8）
+CREATE TABLE IF NOT EXISTS app_logs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    level       TEXT,
+    logger      TEXT,
+    message     TEXT,
+    traceback   TEXT,
+    elapsed_ms  REAL,
+    url         TEXT,
+    method      TEXT,
+    ip          TEXT,
+    uid         TEXT,
+    created_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_app_logs_level ON app_logs(level);
+CREATE INDEX IF NOT EXISTS idx_app_logs_created ON app_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_app_logs_elapsed ON app_logs(elapsed_ms);

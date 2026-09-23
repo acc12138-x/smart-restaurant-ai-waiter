@@ -1,0 +1,287 @@
+﻿{% extends "admin/base.html" %}
+{% set active = 'menu' %}
+{% block page_title %}菜单管理{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+  <button id="btnAddItem" class="btn-blue">＋ 新增菜品</button>
+  <button id="btnAddCat" class="btn-outline">＋ 新增分类</button>
+  <span id="totalCount" class="total-count"></span>
+</div>
+
+<div id="menuAdminList"></div>
+
+<!-- 菜品编辑弹窗 -->
+<div class="modal" id="itemModal">
+  <div class="modal-panel" style="width:min(520px,94vw);">
+    <div class="modal-head">
+      <h3 id="itemModalTitle">新增菜品</h3>
+      <button class="modal-close" onclick="closeItemModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="nf-label">所属分类</label>
+      <select id="imCategory" class="nf-input"></select>
+
+      <label class="nf-label" style="margin-top:12px;">菜名</label>
+      <input type="text" id="imName" class="nf-input" maxlength="30" placeholder="例如：牛肉泡馍(小份)">
+
+      <label class="nf-label" style="margin-top:12px;">价格（元）</label>
+      <input type="number" id="imPrice" class="nf-input" min="0.01" step="0.01" placeholder="例如：24">
+
+      <label class="nf-label" style="margin-top:12px;">Emoji（1 个字符）</label>
+      <input type="text" id="imEmoji" class="nf-input" maxlength="4" placeholder="🍜">
+
+      <label class="nf-label" style="margin-top:12px;">今日库存（留空 = 无限）</label>
+      <input type="number" id="imStock" class="nf-input" min="0" step="1"
+             placeholder="如：10（卖完自动下架）">
+
+      <label class="nf-label" style="margin-top:12px;">描述</label>
+      <textarea id="imDesc" class="nf-input kb-textarea" rows="3" maxlength="80"
+                placeholder="一句话描述这道菜"></textarea>
+
+      <p id="imMsg" class="auth-msg"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-outline" onclick="closeItemModal()">取消</button>
+      <button class="btn-blue" id="imConfirm">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新增分类弹窗 -->
+<div class="modal" id="catModal">
+  <div class="modal-panel" style="width:min(400px,92vw);">
+    <div class="modal-head">
+      <h3>新增分类</h3>
+      <button class="modal-close" onclick="closeCatModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="nf-label">分类名</label>
+      <input type="text" id="cmName" class="nf-input" maxlength="20" placeholder="例如：季节限定">
+      <p id="cmMsg" class="auth-msg"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-outline" onclick="closeCatModal()">取消</button>
+      <button class="btn-blue" id="cmConfirm">创建</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block script %}
+<script>
+var menuData = [];
+var editingOldName = null;
+
+function escapeHtml(s){
+  return String(s || '').replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+async function loadMenu(){
+  var r = await fetch('/admin/api/menu');
+  var d = await r.json();
+  var box = document.getElementById('menuAdminList');
+  if (d.code !== 0){ box.innerHTML = '<p class="muted">加载失败</p>'; return; }
+  menuData = d.data || [];
+
+  var total = 0;
+  menuData.forEach(function(cat){ total += (cat.items || []).length; });
+  document.getElementById('totalCount').textContent =
+    menuData.length + ' 个分类 · ' + total + ' 道菜';
+
+  if (!menuData.length){
+    box.innerHTML = '<p class="muted">菜单为空，点上方"新增分类"开始</p>';
+    return;
+  }
+
+  box.innerHTML = menuData.map(function(cat){
+    var rows = (cat.items || []).map(function(it){
+      var stockVal = (it.stock === null || it.stock === undefined) ? '' : it.stock;
+      var stockHtml;
+      if (stockVal === '') {
+        stockHtml = '<span class="stock-inf">无限</span>';
+      } else if (stockVal <= 0) {
+        stockHtml = '<span class="stock-out">售罄</span>';
+      } else if (stockVal <= 5) {
+        stockHtml = '<span class="stock-low">' + stockVal + '</span>';
+      } else {
+        stockHtml = '<span class="stock-ok">' + stockVal + '</span>';
+      }
+      return '<tr>' +
+        '<td style="font-size:20px;text-align:center;">' + escapeHtml(it.emoji || '🍜') + '</td>' +
+        '<td><b>' + escapeHtml(it.name) + '</b></td>' +
+        '<td class="num">¥' + escapeHtml(it.price) + '</td>' +
+        '<td>' + stockHtml + '</td>' +
+        '<td class="small ellipsis" title="' + escapeHtml(it.desc) + '">' + escapeHtml(it.desc || '') + '</td>' +
+        '<td>' +
+          '<button class="btn-mini js-edit" data-cat="' + escapeHtml(cat.category) + '" data-name="' + escapeHtml(it.name) + '">编辑</button>' +
+          '<button class="btn-mini ghost js-del" data-cat="' + escapeHtml(cat.category) + '" data-name="' + escapeHtml(it.name) + '">删除</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    return '<div class="section-block">' +
+      '<div class="kb-head">' +
+        '<h2 class="block-h2" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">' +
+          escapeHtml(cat.category) + ' <span class="muted" style="font-size:13px;">(' + (cat.items||[]).length + ')</span>' +
+        '</h2>' +
+        '<button class="btn-mini ghost js-delcat" data-cat="' + escapeHtml(cat.category) + '">删除分类</button>' +
+      '</div>' +
+      '<div class="table-wrap">' +
+        '<table class="data-table">' +
+          '<thead><tr><th style="width:48px;">Emoji</th><th>菜名</th><th style="width:100px;">价格</th><th style="width:90px;">库存</th><th>描述</th><th style="width:160px;">操作</th></tr></thead>' +
+          '<tbody>' + (rows || '<tr><td colspan="5" class="loading-cell">该分类还没有菜品</td></tr>') + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  box.querySelectorAll('.js-edit').forEach(function(b){
+    b.onclick = function(){ openItemModal(b.dataset.cat, b.dataset.name); };
+  });
+  box.querySelectorAll('.js-del').forEach(function(b){
+    b.onclick = function(){ deleteItem(b.dataset.cat, b.dataset.name); };
+  });
+  box.querySelectorAll('.js-delcat').forEach(function(b){
+    b.onclick = function(){ deleteCategory(b.dataset.cat); };
+  });
+}
+
+function fillCategorySelect(selected){
+  var sel = document.getElementById('imCategory');
+  sel.innerHTML = menuData.map(function(cat){
+    var s = cat.category === selected ? ' selected' : '';
+    return '<option value="' + escapeHtml(cat.category) + '"' + s + '>' + escapeHtml(cat.category) + '</option>';
+  }).join('');
+}
+
+function openItemModal(category, name){
+  editingOldName = name || null;
+  var item = null;
+  if (name){
+    var cat = menuData.find(function(c){ return c.category === category; });
+    if (cat) item = (cat.items || []).find(function(it){ return it.name === name; });
+  }
+  document.getElementById('itemModalTitle').textContent = name ? '编辑菜品' : '新增菜品';
+  fillCategorySelect(category || (menuData[0] && menuData[0].category));
+  document.getElementById('imName').value = item ? item.name : '';
+  document.getElementById('imPrice').value = item ? item.price : '';
+  document.getElementById('imEmoji').value = item ? (item.emoji || '') : '';
+  document.getElementById('imStock').value = (item && item.stock !== null && item.stock !== undefined) ? item.stock : '';
+  document.getElementById('imDesc').value = item ? (item.desc || '') : '';
+  document.getElementById('imMsg').textContent = '';
+  document.getElementById('itemModal').classList.add('show');
+}
+
+function closeItemModal(){
+  document.getElementById('itemModal').classList.remove('show');
+  editingOldName = null;
+}
+
+document.getElementById('itemModal').onclick = function(e){
+  if (e.target.id === 'itemModal') closeItemModal();
+};
+
+document.getElementById('imConfirm').onclick = async function(){
+  var msg = document.getElementById('imMsg');
+  var payload = {
+    category: document.getElementById('imCategory').value,
+    old_name: editingOldName,
+    item: {
+      name: document.getElementById('imName').value.trim(),
+      price: document.getElementById('imPrice').value.trim(),
+      emoji: document.getElementById('imEmoji').value.trim(),
+      stock: document.getElementById('imStock').value.trim(),
+      desc: document.getElementById('imDesc').value.trim(),
+    },
+  };
+  if (!payload.item.name){ msg.textContent = '菜名不能为空'; return; }
+  if (!payload.item.price || parseFloat(payload.item.price) <= 0){
+    msg.textContent = '价格必须大于 0'; return;
+  }
+
+  var btn = this;
+  btn.disabled = true; btn.textContent = '保存中…';
+  try {
+    var r = await fetch('/admin/api/menu/item', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    var d = await r.json();
+    if (d.code === 0){
+      closeItemModal();
+      loadMenu();
+    } else {
+      msg.textContent = d.msg || '保存失败';
+    }
+  } catch (e) {
+    msg.textContent = '网络错误';
+  } finally {
+    btn.disabled = false; btn.textContent = '保存';
+  }
+};
+
+async function deleteItem(category, name){
+  if (!confirm('确定删除「' + name + '」？')) return;
+  var r = await fetch('/admin/api/menu/item', {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({category: category, name: name}),
+  });
+  var d = await r.json();
+  if (d.code === 0) loadMenu();
+  else alert(d.msg || '删除失败');
+}
+
+document.getElementById('btnAddItem').onclick = function(){
+  if (!menuData.length){ alert('先创建一个分类'); return; }
+  openItemModal(null);
+};
+
+document.getElementById('btnAddCat').onclick = function(){
+  document.getElementById('cmName').value = '';
+  document.getElementById('cmMsg').textContent = '';
+  document.getElementById('catModal').classList.add('show');
+  setTimeout(function(){ document.getElementById('cmName').focus(); }, 100);
+};
+
+function closeCatModal(){
+  document.getElementById('catModal').classList.remove('show');
+}
+
+document.getElementById('catModal').onclick = function(e){
+  if (e.target.id === 'catModal') closeCatModal();
+};
+
+document.getElementById('cmConfirm').onclick = async function(){
+  var name = document.getElementById('cmName').value.trim();
+  var msg = document.getElementById('cmMsg');
+  if (!name){ msg.textContent = '分类名不能为空'; return; }
+  var r = await fetch('/admin/api/menu/category', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: name}),
+  });
+  var d = await r.json();
+  if (d.code === 0){ closeCatModal(); loadMenu(); }
+  else msg.textContent = d.msg || '创建失败';
+};
+
+async function deleteCategory(name){
+  if (!confirm('确定删除分类「' + name + '」？\n（分类下必须没有菜品）')) return;
+  var r = await fetch('/admin/api/menu/category', {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: name}),
+  });
+  var d = await r.json();
+  if (d.code === 0) loadMenu();
+  else alert(d.msg || '删除失败');
+}
+
+loadMenu();
+</script>
+{% endblock %}

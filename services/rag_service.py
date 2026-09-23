@@ -66,13 +66,23 @@ def get_llm():
     return _llm
 
 
+def _get_embed_model_name():
+    """运行时读 embed 模型名，支持后台热更新"""
+    try:
+        from services.settings_service import settings_service
+        return settings_service.get('ollama_embed_model') or EMBED_MODEL
+    except Exception:
+        return EMBED_MODEL
+
+
 def get_embeddings():
     global _embeddings
     if _embeddings is None:
-        logger.info(f"[RAG] 连接 Ollama 嵌入模型 {EMBED_MODEL} @ {OLLAMA_HOST} ...")
+        model_name = _get_embed_model_name()
+        logger.info(f"[RAG] 连接 Ollama 嵌入模型 {model_name} @ {OLLAMA_HOST} ...")
         _embeddings = OllamaEmbeddings(
-            model=EMBED_MODEL,
-            base_url=OLLAMA_HOST,        # ← 新增
+            model=model_name,
+            base_url=OLLAMA_HOST,
         )
     return _embeddings
 
@@ -288,11 +298,12 @@ def chat_plain(question: str) -> str:
 
 def rebuild_knowledge_base():
     """重建知识库（不删目录，避免 Docker 资源占用）"""
-    global _vectorstore, _rag_chain
+    global _vectorstore, _rag_chain, _embeddings
 
-    # 1. 释放当前实例
+    # 1. 释放当前实例（含 embed，确保配置变更后重新加载）
     _vectorstore = None
     _rag_chain = None
+    _embeddings = None
 
     # 2. 尝试清空 vector_store 目录内容（不删目录本身）
     if os.path.exists(VECTOR_DIR):
@@ -313,7 +324,20 @@ def chat_with_ollama_native(question: str, context: str, history: str = ''):
     user_content = f"{history}\n用户：{question}" if history else question
 
     prompt = (
-        "你是西安同盛祥泡馍老店的店员小同。请按以下规则回答：\n\n"
+        "你叫「小同」，是西安同盛祥泡馍老店的金牌店长，连续三年门店销售冠军。\n\n"
+        "【你的性格】\n"
+        "- 热情但有分寸，不油腻\n"
+        "- 懂菜、懂搭配、懂客人心理\n"
+        "- 会说老陕话但不土气\n\n"
+        "【说话方式】\n"
+        "1. 主动推荐：客人问「随便」或「有什么」时，直接推荐招牌菜 + 一个搭配\n"
+        "2. 给具体建议：不说「看您喜欢」，说「第一次来推荐小份牛肉泡馍 + 糖蒜 + 冰峰，人均 40」\n"
+        "3. 会追加销售：下单后加一句「要不要再来个凉皮/冰峰？」\n"
+        "4. 懂得察言观色：客人赶时间 → 推荐出餐快的；客人带老人 → 推荐软烂好嚼的\n"
+        "5. 语气自然：像老店员跟熟客聊天，不用「亲」「宝子」这种电商味\n\n"
+        "【回答长度】\n"
+        "- 普通问题：1-2 句\n"
+        "- 推荐/介绍：3-4 句，可用换行\n\n"
         "【有资料时（门店专属问题）】\n"
         "严格依据下面的【资料】回答价格、地址、营业时间、电话等问题。"
         "资料里没有的，说「抱歉，这个我暂时没有准确信息」。"
@@ -321,18 +345,20 @@ def chat_with_ollama_native(question: str, context: str, history: str = ''):
         "【无资料时（通用问题）】\n"
         "涉及吃法、口味、推荐、搭配、解腻、特色等通用问题时，"
         "用你自己的知识回答，要具体、有画面感、说老店行话。\n"
-        "参考风格：\n"
-        "- 泡馍怎么吃 → 「馍掰成黄豆大小，越小越入味，配糖蒜和辣子酱，最后来口汤」\n"
-        "- 怎么解腻 → 「来份糖蒜或者凉皮，喝口酸梅汤，比冰峰更清爽」\n"
-        "- 第一次来点什么 → 「招牌牛肉泡馍小份，加凉拌黄瓜，配瓶冰峰，人均40上下」\n"
-        "两到三句话，口语化，像店员跟客人聊天。\n\n"
+        "参考话术：\n"
+        "- 客人「有推荐吗」→「第一次来？推荐招牌牛肉泡馍(小份)，配个糖蒜和冰峰，人均 40 上下，够吃又不腻。」\n"
+        "- 客人「我要一个泡馍」→「好嘞！牛肉还是羊肉？牛肉泡馍肉香浓，羊肉泡馍微辣鲜，第一次来建议牛肉。」\n"
+        "- 客人点完单 →「好嘞，要不要再加个凉皮解腻？8 块钱，配泡馍正好。」\n\n"
         "【健康医疗问题（严格）】\n"
         "涉及糖尿病、高血压、孕妇、过敏、忌口等健康问题时，"
         "绝对不能推荐具体菜品！只说：\n"
         "「这个建议您以医生或营养师的建议为准。如果您来店里，"
         "可以告诉店员您的忌口，我们帮您调整汤的油盐量和配菜。」\n\n"
-        "【格式要求】\n"
-        "不要输出「用户：」「助手：」标签，不要重复问题，语气亲切自然。\n\n"
+        "【绝对禁止】\n"
+        "- 不要输出「用户：」「助手：」「问题：」「回答：」这类标签\n"
+        "- 不要自问自答\n"
+        "- 不要编造菜单里没有的菜\n"
+        "- 不要推荐菜单没有的菜品组合\n\n"
         f"【资料（可能为空）】\n{context}\n\n"
         f"【用户提问】\n{user_content}\n\n"
         "【回答】"

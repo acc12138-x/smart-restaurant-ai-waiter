@@ -37,6 +37,17 @@ def _log_chat_async(uid, question, answer, intent='other', elapsed_ms=0, is_hit=
         from utils.logger import logger
         logger.warning(f'chat_log 写入失败: {e}')
 
+@api_bp.route('/table/scan', methods=['POST'])
+def api_table_scan():
+    data = request.get_json(silent=True) or {}
+    tno = (data.get('table_no') or '').strip()[:10]
+    if not tno:
+        return error(400, '缺少桌号')
+    from services.admin_service import admin_service
+    admin_service.record_scan(tno)
+    return success(msg='ok')
+
+
 @api_bp.route('/menu')
 def api_menu():
     return success(data=menu_service.get_all())
@@ -103,6 +114,42 @@ def api_kb_rebuild():
 
 
 # ============================================
+# 购物车下单专用接口（跳过 LLM，毫秒级）
+# ============================================
+@api_bp.route('/order/create', methods=['POST'])
+@login_required
+def api_order_create():
+    """购物车下单：items 已经是精确菜名+数量，不走 LLM"""
+    data = request.get_json(silent=True) or {}
+    raw_items = data.get('items') or []
+    table_no = (data.get('table_no') or '外带').strip()[:10]
+
+    if not isinstance(raw_items, list) or not raw_items:
+        return error(400, '购物车是空的')
+
+    items = []
+    for it in raw_items:
+        if not isinstance(it, dict):
+            continue
+        name = (it.get('name') or '').strip()
+        try:
+            qty = int(it.get('qty', 1))
+        except (ValueError, TypeError):
+            qty = 1
+        if name and qty > 0:
+            items.append({'name': name, 'qty': min(qty, 50)})
+
+    if not items:
+        return error(400, '购物车是空的')
+
+    try:
+        result = order_service.create(items, table_no=table_no, uid=g.uid)
+        return success(data=result, msg='下单成功')
+    except BizError as e:
+        return error(e.code, e.msg)
+
+
+# ============================================
 # 用户订单
 # ============================================
 @api_bp.route('/user/orders', methods=['GET'])
@@ -111,6 +158,41 @@ def my_orders():
     orders = order_service.get_by_uid(g.uid)
     return success(data=orders)
 
+
+
+@api_bp.route('/hero', methods=['GET'])
+def api_hero_public():
+    """前台读 Hero 配置（无需登录）"""
+    import json as _json
+    from services.settings_service import settings_service
+
+    def _load(key, default):
+        raw = settings_service.get(key)
+        try:
+            return _json.loads(raw) if raw else default
+        except Exception:
+            return default
+
+    return success(data={
+        'items': _load('hero_items', []),
+        'labels': _load('hero_labels', []),
+        'autoplay_ms': settings_service.get_int('hero_autoplay_ms', 8000),
+    })
+
+
+@api_bp.route('/chat/welcome', methods=['GET'])
+def api_chat_welcome():
+    """已登录用户 → 个性化欢迎语；匿名 → data=None"""
+    uid = None
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        try:
+            payload = auth_service.verify_token(auth_header[7:].strip())
+            uid = payload['uid']
+        except BizError:
+            pass
+    msg = chat_service.welcome_message(uid)
+    return success(data=({'message': msg} if msg else None))
 
 
 @api_bp.route('/chat/clear', methods=['POST'])

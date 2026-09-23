@@ -48,13 +48,17 @@ async function loadMessages(page) {
     var foot = m.read
       ? '<span class="badge badge-done">已读</span><button class="btn-mini ghost" onclick="markRead(' + m.id + ', false)">标为未读</button>'
       : '<span class="badge badge-pending">未读</span><button class="btn-mini" onclick="markRead(' + m.id + ', true)">标为已读</button>';
+    var delBtn = '<button class="btn-mini msg-del" onclick="deleteMsg(' + m.id + ')">删除</button>';
     return '<div class="msg-card ' + cls + '">' +
       '<div class="msg-head">' +
         '<span class="msg-name">' + name + '</span>' +
         '<span class="msg-time">' + time + '</span>' +
       '</div>' +
       '<div class="msg-content">' + content + '</div>' +
-      '<div class="msg-foot">' + foot + '</div>' +
+      '<div class="msg-foot">' +
+        '<div style="display:flex;gap:6px;align-items:center;">' + foot + '</div>' +
+        delBtn +
+      '</div>' +
     '</div>';
   }).join('');
 
@@ -68,6 +72,18 @@ function renderPager(data) {
     '<button ' + (data.page <= 1 ? 'disabled' : '') + ' onclick="loadMessages(' + (data.page - 1) + ')">上一页</button>' +
     '<span>' + data.page + ' / ' + data.pages + '</span>' +
     '<button ' + (data.page >= data.pages ? 'disabled' : '') + ' onclick="loadMessages(' + (data.page + 1) + ')">下一页</button>';
+}
+
+async function deleteMsg(id) {
+  if (!confirm('确定删除这条留言？删除后不可恢复。')) return;
+  try {
+    var r = await fetch('/admin/api/messages/' + id, {method: 'DELETE'});
+    var d = await r.json();
+    if (d.code === 0) loadMessages(currentPage);
+    else alert(d.msg || '删除失败');
+  } catch(e) {
+    alert('网络错误');
+  }
 }
 
 async function markRead(id, read) {

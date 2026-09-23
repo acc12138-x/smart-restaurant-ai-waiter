@@ -95,6 +95,7 @@ async function loadTables() {
         '<div class="qr-meta">扫码 ' + (t.scan_count || 0) + ' 次</div>' +
         '<div class="qr-actions">' +
           '<button class="btn-mini js-show-qr" data-no="' + t.table_no + '">查看 / 下载</button>' +
+          '<button class="btn-mini js-scan-plus" data-no="' + t.table_no + '">+1</button>' +
           '<button class="btn-mini ghost js-del-table" data-id="' + t.id + '" data-no="' + t.table_no + '">删除</button>' +
         '</div>' +
       '</div>' +
@@ -103,6 +104,15 @@ async function loadTables() {
 
   box.querySelectorAll('.js-show-qr').forEach(function(b) {
     b.onclick = function() { showQr(b.dataset.no); };
+  });
+  box.querySelectorAll('.js-scan-plus').forEach(function(b) {
+    b.onclick = function() {
+      fetch('/api/table/scan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({table_no: b.dataset.no})
+      }).then(function(){ loadTables(); });
+    };
   });
   box.querySelectorAll('.js-del-table').forEach(function(b) {
     b.onclick = function() { delTable(parseInt(b.dataset.id, 10), b.dataset.no); };

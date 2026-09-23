@@ -1,4 +1,5 @@
 # services/chat_service.py
+import re
 from services import intent_service
 from services.order_service import order_service
 from services.session_service import session_service
@@ -19,6 +20,38 @@ class ChatService:
 
     FOLLOWUP_WORDS = ['呢', '那个', '这个', '多少', '一份', '一个', '两份', '两个', '三份', '来点', '再要']
     ORDER_WORDS = ['我要', '来一', '来两', '来三', '点一', '点两', '点三', '要一', '要两', '要三', '给我']
+
+    def _get_intent_result(self, message, history_text=''):
+        """优先 LLM 语义理解，失败/关闭降级到规则。
+        例外：accept_recommend / reject_recommend 这类强规则词直接走规则，
+        避免 LLM 把"就这个"误判为 place_order。"""
+        # 1) 先跑规则，命中 accept/reject/leave_message → 直接用（不放给 LLM）
+        try:
+            rule_result = intent_service.classify_intent(message, history=history_text)
+            if rule_result.get('intent') in ('accept_recommend', 'reject_recommend', 'leave_message'):
+                logger.info('[路径] 规则命中 ' + rule_result['intent'])
+                return rule_result
+        except Exception:
+            pass
+
+        # 2) 走 LLM
+        import time as _t
+        try:
+            from services.llm_parser import parse as llm_parse, is_enabled
+            if is_enabled():
+                _t0 = _t.time()
+                r = llm_parse(message, history=history_text)
+                _dt = (_t.time() - _t0) * 1000
+                if r and r.get('intent'):
+                    logger.info(f'[路径] LLM ({_dt:.0f}ms) intent={r.get("intent")}')
+                    return r
+                else:
+                    logger.warning(f'[路径] LLM 失败 ({_dt:.0f}ms)，降级规则')
+            else:
+                logger.info('[路径] LLM 已关闭，走规则')
+        except Exception as e:
+            logger.warning(f'LLM parser 异常，降级规则: {e}')
+        return intent_service.classify_intent(message, history=history_text)
 
     def _clean(self, text: str) -> str:
         if not text:
@@ -45,7 +78,329 @@ class ChatService:
                 return item['content']
         return None
 
-    def _handle_modify_order(self, uid, message):
+    def _detect_unknown_dish(self, message):
+        """检测用户问的菜名是否不在菜单里
+        返回菜名候选（不在菜单），或 None（不算菜名/在菜单/泛称）
+        """
+        import re
+        from services.menu_service import menu_service
+
+        m = (message or '').strip()
+
+        # 1. 去掉疑问词
+        m = re.sub(r'(你们有|你们卖|请问一下|请问|问一下|问下|想知道|有没有卖|有没有|有卖|卖不卖)', '', m)
+        m = re.sub(r'(多少钱|什么价格|价格|几块|多少元|怎么卖|贵不贵|什么价|是啥|是什么|啥)', '', m)
+        # 2. 去掉动作词
+        m = re.sub(r'(我要|来一|来两|来三|来|点一|点两|点三|点|要一|要两|要三|要|给我|打包|下单|吃|喝|买)', '', m)
+        # 3. 去掉数量词
+        m = re.sub(r'[一两二三四五六七八九十百\d]+\s*[份个碗杯瓶盘]', '', m)
+        # 4. 去掉语气词、'个'和标点
+        m = re.sub(r'(吗|呢|吧|啊|呀|的|了|哦|嘛|噢|唉|个)', '', m)
+        m = re.sub(r'[，。！？!?；;、\s]+', '', m).strip()
+
+        # 核心词长度必须在 2-8 之间
+        if len(m) < 2 or len(m) > 8:
+            return None
+        # 必须全是中文
+        if not re.match(r'^[\u4e00-\u9fff]+$', m):
+            return None
+
+        # 纯泛称（只是问品类）→ 不拦
+        VAGUE = ['泡馍', '馍', '面', '汤', '凉皮', '蒜', '汽水', '饮料', '套餐', '招牌', '推荐', '小助手', '客服']
+        if any(kw in m for kw in VAGUE):
+            return None
+
+        # 在菜单里 → 不拦
+        for dish in menu_service.get_flat():
+            if m == dish['name'] or m in dish['name']:
+                return None
+
+        # 剩下未匹配的 → 拦（就是未知菜名）
+        return m
+
+
+    def welcome_message(self, uid=None):
+        """进 /chat 时的个性化欢迎语；匿名 → None（前端用默认兜底）"""
+        if not uid:
+            return None
+        try:
+            from repositories.instances import order_repo, member_repo
+            from services.menu_service import menu_service
+            from collections import Counter
+
+            member = member_repo.find_by_id(uid) or {}
+            nickname = (member.get('nickname') or member.get('username')
+                        or '老板').strip()
+
+            def _simple(name):
+                if '(' in name:
+                    return name.split('(')[0].strip()
+                if '（' in name:
+                    return name.split('（')[0].strip()
+                return name.strip()
+
+            orders = order_repo.find(uid=uid)
+            orders = [o for o in orders if o.get('status') != 'cancelled']
+            orders.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+
+            # ---------- 场景 A：第一次来（无订单）----------
+            if not orders:
+                return (
+                    nickname + '您好呀，我是同盛祥的金牌店长小同 👨‍🍳\n\n'
+                    '我能帮您：\n'
+                    '  🍜 点菜 · 推荐 · 算价\n'
+                    '  🏪 查门店 · 营业时间\n'
+                    '  💬 给老店留言\n\n'
+                    '第一次来？招牌牛肉泡馍(小份)配糖蒜+冰峰，人均 40 上下，够味不腻。\n'
+                    '想吃啥，直接跟我说～'
+                )
+
+            last_order = orders[0]
+            last_items = last_order.get('items') or []
+            if not last_items:
+                return (
+                    nickname + '您好，我是金牌店长小同 👨‍🍳\n\n'
+                    '我能帮您点菜、推荐搭配、查门店、留言。\n'
+                    '招牌牛肉泡馍配糖蒜+冰峰，人均 40 上下，够味不腻。\n'
+                    '想吃啥，直接跟我说～'
+                )
+
+            # 最近一单里数量最多的菜
+            cnt = Counter()
+            for it in last_items:
+                cnt[it.get('name')] += int(it.get('qty', 1))
+            last_dish = cnt.most_common(1)[0][0]
+            last_simple = _simple(last_dish)
+
+            # 推荐没点过的清爽/小吃
+            all_ordered = set()
+            for o in orders:
+                for it in (o.get('items') or []):
+                    all_ordered.add(it.get('name'))
+            candidates = [d for d in menu_service.get_flat()
+                          if d['name'] not in all_ordered
+                          and d.get('category') in ('清爽搭配', '经典小吃')]
+            suggest = _simple(candidates[0]['name']) if candidates else '凉皮'
+
+            return (
+                nickname + '您好，我是金牌店长小同 👨‍🍳\n\n'
+                '上次您点的「' + last_simple + '」还合口味吗？\n'
+                '今天要不要试试「' + suggest + '」？或者老规矩再来一份？\n\n'
+                '点菜、推荐、留言，随时喊我～'
+            )
+        except Exception as e:
+            logger.warning('[Welcome] 生成失败: ' + str(e))
+            return None
+    def _handle_leave_message(self, message, uid, hint=None):
+        """处理留言。两种模式：
+        1. "我要留言" 无内容 → 反问，设置 pending
+        2. 有内容 / pending 状态 → 直接写入
+        """
+        import re as _re
+        from services.message_service import message_service
+        from utils.exceptions import BizError
+
+        # pending 状态：当前消息就是留言内容
+        if session_service.is_pending_message(uid):
+            session_service.clear_pending_message(uid)
+            content = (message or '').strip()
+            # 剥掉前后缀
+            content = _re.sub(r'^(留言[：:]?|内容是[：:]?|留个言[：:]?)\s*', '', content).strip()
+            if not content:
+                return '内容不能为空哦，想留什么话？'
+            return self._write_message(content, uid)
+
+        # 从消息里剥出内容
+        content = (message or '').strip()
+        # 剥"我要留言" "给老店留句话" "反馈" 等触发词
+        content = _re.sub(
+            r'^(我要|我想|想|给老店|给老板|给店长|请|帮我)?'
+            r'(留言[：:]?|留个言[：:]?|留句话[：:]?|反馈[：:]?|建议[：:]?|投诉[：:]?)\s*',
+            '', content
+        ).strip()
+        # 剥末尾的"留言"（如"泡馍很好吃 留言"）
+        content = _re.sub(r'\s*(留言|留个言|留句话)[：:]?$', '', content).strip()
+
+        # 有内容 → 直接写
+        if len(content) >= 2:
+            return self._write_message(content, uid)
+
+        # 无内容 → 反问
+        session_service.set_pending_message(uid, True)
+        return ('好的，您想给老店留什么话？直接发给我就行，'
+                '我会转达给老板。（一句话，100 字以内）')
+
+    def _write_message(self, content, uid):
+        """实际写入留言"""
+        from services.message_service import message_service
+        from utils.exceptions import BizError
+
+        content = (content or '').strip()
+        if not content:
+            return '内容不能为空哦～'
+        if len(content) > 100:
+            return '留言最长 100 字，精简一下再发～'
+
+        # 拿昵称
+        name = '匿名老客'
+        if uid:
+            try:
+                from repositories.instances import member_repo
+                m = member_repo.find_by_id(uid) or {}
+                name = (m.get('nickname') or m.get('username') or '老客').strip()
+            except Exception:
+                pass
+
+        try:
+            message_service.create(name=name, content=content)
+            return ('收到啦！已帮您转达给老板 👨‍🍳 谢谢您的反馈，'
+                    '老店会认真看的。要不要再看看菜单？')
+        except BizError as e:
+            return '留言失败：' + str(e.msg)
+        except Exception as e:
+            logger.warning('[Message] 写入失败: ' + str(e))
+            return '留言失败，稍后再试～'
+
+    def _extract_dishes_from_text(self, text):
+        """从推荐文本里扫出菜单菜名，最多 3 个，跳过售罄"""
+        from services.menu_service import menu_service
+        found = []
+        seen = set()
+
+        # 按名字长度倒序，优先匹配最长的（"优质羊肉泡馍" 先于 "羊肉泡馍"）
+        sorted_dishes = sorted(menu_service.get_flat(), key=lambda d: -len(d['name']))
+
+        # 第一步：先扫所有命中
+        raw = []
+        for d in sorted_dishes:
+            name = d['name']
+            stock = d.get('stock')
+            if stock is not None and stock <= 0:
+                continue
+
+            # 完整名匹配
+            if name in text:
+                raw.append(d)
+                continue
+
+            # 简名匹配
+            simple = name.split('(')[0].split('（')[0].strip()
+            if len(simple) >= 2 and simple in text:
+                raw.append(d)
+
+        # 第二步：套餐优先 —— 如果命中里有套餐，只保留套餐
+        has_taocan = any('套餐' in d['name'] for d in raw)
+        if has_taocan:
+            raw = [d for d in raw if '套餐' in d['name']]
+
+        # 第三步：按长度倒序，去重（同简名只留一个）
+        raw.sort(key=lambda d: -len(d['name']))
+        for d in raw:
+            name = d['name']
+            if name in seen:
+                continue
+            simple = name.split('(')[0].split('（')[0].strip()
+            # 已收录同简名 → 跳过
+            if any(simple == s or simple in s for s in seen):
+                continue
+            found.append({'name': name, 'qty': 1})
+            seen.add(simple)
+            if len(found) >= 3:
+                break
+
+        return found
+
+    def _handle_recommend(self, message, uid=None):
+        """推荐走 LLM：给菜单 + 用户消息 + 历史，让 AI 灵活挑菜（v3.9）"""
+        import requests as _req
+        import json as _json
+        from services.menu_service import menu_service
+        from services.llm_parser import _get_config, _get_ollama_host
+        from configs.config import get_config as _get_cfg
+
+        cfg_llm = _get_config()
+        cfg_app = _get_cfg()
+
+        # ---------- 已推过的菜（让 AI 避开）----------
+        pushed = session_service.get_recommend_history(uid) if uid else []
+        pushed_set = set(pushed)
+
+        # ---------- 组装菜单 ----------
+        lines = []
+        for d in menu_service.get_flat():
+            stock = d.get('stock')
+            sold = (stock is not None and stock <= 0)
+            flag = ' [售罄]' if sold else ''
+            # 已推过的菜打标记（但仍在菜单里，AI 可选）
+            mark = ' [已推过]' if d['name'] in pushed_set else ''
+            lines.append(
+                f"  {d['name']}（{d.get('category','')}）¥{d['price']} - "
+                f"{d.get('desc','')}{flag}{mark}"
+            )
+        menu_str = '\n'.join(lines)
+
+        # ---------- 已推列表 ----------
+        pushed_str = '、'.join(pushed[-5:]) if pushed else '(无)'
+
+        # ---------- 历史 ----------
+        history = session_service.format_history(uid, max_rounds=3) or '(无)'
+
+        prompt = (
+            "你是西安同盛祥泡馍老店的金牌店长小同，连续三年门店销售冠军。\n\n"
+            "【顾客说】\n" + message + "\n\n"
+            "【菜单（只从这挑）】\n" + menu_str + "\n\n"
+            "【最近对话】\n" + history + "\n\n"
+            "【最近已推过的菜（本次尽量避开）】\n" + pushed_str + "\n\n"
+            "【要求】\n"
+            "1. 根据顾客说的内容灵活推荐 1-3 道菜\n"
+            "2. **必须避开【最近已推过的菜】，除非菜单上只剩这几样**\n"
+            "3. 关注顾客提到的：人数、口味偏好、预算、忌口、想吃的类型\n"
+            "4. 每次推荐的**组合、菜名、话术**都要不一样，不要复读\n"
+            "5. 一两句话，口语化，像老陕店员跟熟客唠嗑\n"
+            "6. 只推菜单里的菜，不能编\n"
+            "7. 不要推售罄的菜\n"
+            "8. 直接回答，不要「用户：」「助手：」标签，不要自问自答\n"
+            "9. 如果顾客只是打招呼/闲聊，就自然接一句，别硬推\n\n"
+            "【回复】"
+        )
+
+        # ---------- 调 LLM ----------
+        host = _get_ollama_host()
+        url = host + '/api/chat'
+        payload = {
+            'model': cfg_llm.get('ollama_model') or cfg_app.CHAT_MODEL,
+            'messages': [{'role': 'user', 'content': prompt}],
+            'stream': False,
+            'think': False,
+            'options': {'temperature': 0.75, 'num_predict': 220},
+        }
+
+        try:
+            r = _req.post(url, json=payload, timeout=20)
+            r.raise_for_status()
+            content = (r.json().get('message', {}) or {}).get('content', '').strip()
+            if content:
+                cleaned = self._clean(content)
+                if cleaned:
+                    logger.info('[Recommend-LLM] ' + message[:30] + ' -> ' + cleaned[:60])
+                    # 记录本次推过的菜
+                    try:
+                        if uid:
+                            dishes = self._extract_dishes_from_text(cleaned)
+                            names = [d['name'] for d in (dishes or [])]
+                            if names:
+                                session_service.add_recommend_history(uid, names)
+                    except Exception:
+                        pass
+                    return cleaned
+        except Exception as e:
+            logger.warning('[Recommend-LLM] 调用失败: ' + str(e))
+
+        # ---------- 降级：极简兜底 ----------
+        return ('我们招牌是牛肉泡馍，第一次来推荐小份牛肉泡馍 + 糖蒜 + 冰峰，'
+                '人均 40 上下。您几位？想吃什么口味我帮您配。')
+
+    def _handle_modify_order(self, uid, message, hint=None):
         """把'把X改成Y'解析成：取消含X的最近订单 + 用Y下新单"""
         if not uid:
             return '修改订单需要先登录哦～ 点底部「我的」→「立即登录」。'
@@ -53,16 +408,26 @@ class ChatService:
         import re
         from services.menu_service import menu_service
 
-        # 切分："把A改成B" "A换成B"
-        parts = re.split(r'(?:改成|换成|替换成|改为|换为)', message, maxsplit=1)
-        if len(parts) != 2:
-            return '没看懂您想改成什么，请说"把牛肉泡馍改成羊肉泡馍"这种格式。'
+        old_part = ''
+        new_part = ''
+        new_items = []
 
-        old_part = re.sub(r'^(把|将)', '', parts[0]).strip()
-        new_part = parts[1].strip()
+        # 优先用 LLM 给的 target + new_dish
+        if hint and hint.get('target') and hint.get('new_dish'):
+            old_part = hint['target']
+            new_part = hint['new_dish']
+            if hint.get('items'):
+                new_items = hint['items']
 
-        # 从 new_part 里提取新菜名 + 数量
-        new_items = self._extract_items_from_text(new_part)
+        if not (old_part and new_part):
+            parts = re.split(r'(?:改成|换成|替换成|改为|换为)', message, maxsplit=1)
+            if len(parts) != 2:
+                return '没看懂您想改成什么，请说"把牛肉泡馍改成羊肉泡馍"这种格式。'
+            old_part = re.sub(r'^(把|将)', '', parts[0]).strip()
+            new_part = parts[1].strip()
+
+        if not new_items:
+            new_items = self._extract_items_from_text(new_part)
         if not new_items:
             # 尝试单独匹配菜名
             for dish in menu_service.get_flat():
@@ -139,7 +504,7 @@ class ChatService:
             return '取消操作未生效，请稍后再试。'
         return '\n'.join(lines)
 
-    def _handle_cancel_order(self, uid, message):
+    def _handle_cancel_order(self, uid, message, hint=None):
         """处理取消订单意图
         1. 未登录 → 提示登录
         2. 从 session 找可取消订单（pending/paid）
@@ -185,18 +550,29 @@ class ChatService:
         if not cancellable:
             return '您没有可取消的订单哦～'
 
-        # 尝试从消息里提取菜名
+        # 优先用 LLM 给的 target
         target = None
-        for dish in menu_service.get_flat():
-            if dish['name'] in message:
-                # cancellable 已倒序，第一条匹配就是最新的
-                for o in cancellable:
-                    names = [it.get('name') for it in o.get('items', [])]
-                    if dish['name'] in names:
+        target_dish = (hint or {}).get('target', '') if hint else ''
+        target_dish = target_dish.strip()
+        if target_dish:
+            for o in cancellable:
+                names = [it.get('name') for it in o.get('items', [])]
+                for n in names:
+                    if target_dish in n or n in target_dish:
                         target = o
                         break
                 if target:
                     break
+        else:
+            for dish in menu_service.get_flat():
+                if dish['name'] in message:
+                    for o in cancellable:
+                        names = [it.get('name') for it in o.get('items', [])]
+                        if dish['name'] in names:
+                            target = o
+                            break
+                    if target:
+                        break
 
         # 没指定菜名 → 取最新一单（cancellable[0]）
         if not target:
@@ -258,6 +634,14 @@ class ChatService:
         for d in menu_service.get_flat():
             if d['name'] == m or d['name'] in message:
                 return None
+
+        # 1.5. "X小份"/"X大份" 但菜单里没有对应规格 → 返回主菜不模糊
+        size_match = re.match(r'^(.+?)[大小]份$', m)
+        if size_match:
+            base = size_match.group(1)
+            for d in menu_service.get_flat():
+                if d['name'] == base:  # 主菜正好存在（没有大小份）
+                    return None
 
         # 2. 检查是否是某类菜品的泛称
         VAGUE_GROUPS = {
@@ -330,12 +714,16 @@ class ChatService:
                         return candidates[0]['name'] if candidates else None
 
         # ========== 第二步：无 prefer_size，从用户消息里找菜名 ==========
+        # 关键：按名字长度倒序，优先匹配最长（优质羊肉泡馍 > 羊肉泡馍）
+        sorted_dishes = sorted(all_dishes, key=lambda d: -len(d['name']))
         for item in reversed(user_msgs):
             content = item.get('content', '')
-            for dish in all_dishes:
+            # 1) 完整名匹配（长名优先）
+            for dish in sorted_dishes:
                 if dish['name'] in content:
                     return dish['name']
-            for dish in all_dishes:
+            # 2) 简名匹配（长名优先）
+            for dish in sorted_dishes:
                 simple = simplify(dish['name'])
                 if len(simple) >= 2 and simple in content:
                     return dish['name']
@@ -453,7 +841,7 @@ class ChatService:
         history_text = session_service.format_history(uid, max_rounds=3)
         session_service.add(uid, 'user', message)
 
-        result = intent_service.classify_intent(message, history=history_text)
+        result = self._get_intent_result(message, history_text=history_text)
         intent = result['intent']
         items = result.get('items', [])
         logger.info(f"[Chat] uid={uid} 用户: {message} | 意图: {intent} | 商品: {items}")
@@ -503,7 +891,6 @@ class ChatService:
             # 解腻/搭配
             '解腻': '凉皮或糖蒜都很解腻，再喝口酸梅汤，比冰峰更清爽。',
             '搭配': '凉皮或糖蒜都很解腻，再喝口酸梅汤，比冰峰更清爽。',
-            '推荐': '第一次来推荐招牌牛肉泡馍(小份) + 凉拌牛腱 + 冰峰汽水，人均 40 上下。',
             # 健康
             '孕妇': '孕期饮食建议以医嘱为准，来店里可以告诉店员您的忌口，我们帮您调整汤的油盐量。',
             '糖尿病': '健康问题请以医嘱为准，来店里可以告诉店员您的忌口，我们帮您调整汤的油盐量。',
@@ -528,6 +915,22 @@ class ChatService:
             )
             session_service.add(uid, 'assistant', reply)
             return {'reply': reply, 'intent': intent, 'order': None}
+
+        # ============ 待留言状态：直接进留言分支（优先于所有其他判断）============
+        if session_service.is_pending_message(uid):
+            reply = self._handle_leave_message(message, uid, hint=result)
+            session_service.add(uid, 'assistant', reply)
+            return {'reply': reply, 'intent': 'leave_message', 'order': None}
+
+        # ============ 未知菜名检测（防幻觉，所有意图）============
+        if intent not in ('cancel_order', 'cancel_all', 'modify_order', 'chat',
+                          'recommend', 'query_total', 'leave_message',
+                          'accept_recommend', 'reject_recommend'):
+            unknown = self._detect_unknown_dish(message)
+            if unknown:
+                reply = f'菜单里没有「{unknown}」哦～ 我们的招牌是牛肉泡馍、羊肉泡馍、优质羊肉泡馍，还有凉皮、糖蒜、冰峰汽水。想吃哪种？'
+                session_service.add(uid, 'assistant', reply)
+                return {'reply': reply, 'intent': intent, 'order': None}
 
         # ============ 会话聚合查询（一共/总共/合计多少钱）============
         if intent == 'query_total':
@@ -585,19 +988,61 @@ class ChatService:
 
         # ============ 取消订单 ============
         if intent == 'cancel_order':
-            reply = self._handle_cancel_order(uid, message)
+            reply = self._handle_cancel_order(uid, message, hint=result)
             session_service.add(uid, 'assistant', reply)
             return {'reply': reply, 'intent': 'cancel_order', 'order': None}
+
+        # ============ 留言（优先于推荐，因为可能待留言状态）============
+        if intent == 'leave_message' or session_service.is_pending_message(uid):
+            reply = self._handle_leave_message(message, uid, hint=result)
+            session_service.add(uid, 'assistant', reply)
+            return {'reply': reply, 'intent': 'leave_message', 'order': None}
 
         # ============ 推荐 ============
         if intent == 'recommend':
             reply = self._handle_recommend(message, uid)
+            # 记录推荐结果，供"就这个"用
+            dishes = self._extract_dishes_from_text(reply)
+            if dishes and uid:
+                session_service.set_last_recommend(uid, reply, dishes)
+            session_service.add(uid, 'assistant', reply)
+            return {'reply': reply, 'intent': 'recommend', 'order': None}
+
+        # ============ 接受推荐（"就这个"）============
+        if intent == 'accept_recommend':
+            last = session_service.get_last_recommend(uid)
+            if not last or not last.get('items'):
+                reply = '好的！那您具体想吃哪道菜？直接说菜名就行～'
+                session_service.add(uid, 'assistant', reply)
+                return {'reply': reply, 'intent': 'accept_recommend', 'order': None}
+            if not uid:
+                reply = '下单前请先登录哦～ 点底部「我的」→「立即登录」。'
+                session_service.add(uid, 'assistant', reply)
+                return {'reply': reply, 'intent': intent, 'order': None, 'need_login': True}
+            try:
+                order_result = order_service.create(last['items'], table_no=table_no, uid=uid)
+                reply = '好嘞，就按刚才推荐的给您下：\n' + order_service.format_reply(order_result)
+                session_service.add(uid, 'assistant', reply)
+                session_service.add_order(uid, order_result['order'])
+                session_service.clear_last_recommend(uid)
+                return {'reply': reply, 'intent': 'place_order', 'order': order_result['order']}
+            except Exception as e:
+                session_service.add(uid, 'assistant', str(e))
+                return {'reply': str(e), 'intent': 'accept_recommend', 'order': None}
+
+        # ============ 拒绝推荐（"换一个"）============
+        if intent == 'reject_recommend':
+            session_service.clear_last_recommend(uid)
+            reply = self._handle_recommend(message + ' 换一批不一样的', uid)
+            dishes = self._extract_dishes_from_text(reply)
+            if dishes and uid:
+                session_service.set_last_recommend(uid, reply, dishes)
             session_service.add(uid, 'assistant', reply)
             return {'reply': reply, 'intent': 'recommend', 'order': None}
 
         # ============ 修改订单 ============
         if intent == 'modify_order':
-            reply = self._handle_modify_order(uid, message)
+            reply = self._handle_modify_order(uid, message, hint=result)
             session_service.add(uid, 'assistant', reply)
             return {'reply': reply, 'intent': 'modify_order', 'order': None}
 
@@ -610,12 +1055,16 @@ class ChatService:
                         'need_login': True}
 
             # 模糊菜名检测（"要泡馍" → 反问）
-            vague = self._is_vague_dish(message)
-            if vague and len(vague) > 1:
-                opts = '、'.join('「' + v + '」' for v in vague[:4])
-                reply = f'您想点的是哪一种？我们这儿有 {opts}，请说得具体些～'
-                session_service.add(uid, 'assistant', reply)
-                return {'reply': reply, 'intent': intent, 'order': None}
+            # 关键：LLM 已经解析出精确 items 时，跳过 vague 检查
+            if items:
+                pass  # LLM 已给精确结果，直接下单
+            else:
+                vague = self._is_vague_dish(message)
+                if vague and len(vague) > 1:
+                    opts = '、'.join('「' + v + '」' for v in vague[:4])
+                    reply = f'您想点的是哪一种？我们这儿有 {opts}，请说得具体些～'
+                    session_service.add(uid, 'assistant', reply)
+                    return {'reply': reply, 'intent': intent, 'order': None}
 
             if not items:
                 items = self._extract_items_from_text(message)
@@ -633,10 +1082,28 @@ class ChatService:
                     prefer = '大份'
                 elif '小份' in message:
                     prefer = '小份'
-                last_dish = self._find_last_dish_in_history(uid, prefer_size=prefer)
-                if last_dish:
-                    qty = self._extract_qty_from_message(message)
-                    items = [{'name': last_dish, 'qty': qty}]
+
+                # 尝试从消息里直接抓菜名（如"再要个羊肉" → 羊肉泡馍）
+                msg_dish = self._extract_items_from_text(message)
+                if msg_dish:
+                    items = msg_dish
+                else:
+                    # 从"还要个X"/"再要个X"里提取 X，去菜单模糊匹配
+                    m2 = re.search(r'再?[要来个]+\s*[一二两三四五]*\s*[个份]?\s*(.+)$', message)
+                    if m2:
+                        keyword = m2.group(1).strip()
+                        if keyword and len(keyword) >= 1:
+                            for d in menu_service.get_flat():
+                                if keyword in d['name']:
+                                    items = [{'name': d['name'],
+                                              'qty': self._extract_qty_from_message(message)}]
+                                    break
+
+                if not items:
+                    last_dish = self._find_last_dish_in_history(uid, prefer_size=prefer)
+                    if last_dish:
+                        qty = self._extract_qty_from_message(message)
+                        items = [{'name': last_dish, 'qty': qty}]
 
             if items:
                 try:
@@ -657,16 +1124,30 @@ class ChatService:
         if intent == 'chat':
             # 判断是不是"好的/嗯/行"等确认词
             if message.strip() in ('好的', '好呀', '好嘞', '行吧', '可以', '嗯', 'OK', 'ok'):
-                reply = '好嘞！需要我帮您下单吗？可以告诉我菜品名字和份数，比如「来一份牛肉泡馍」。'
+                reply = '好嘞！那要吃点啥？招牌牛肉泡馍配糖蒜和冰峰最巴适，或者来份套餐更划算，我给您配上？'
             else:
-                reply = '你好！我是同盛祥的小助手，可以问我菜单、营业时间、门店地址，也可以直接点菜。'
+                reply = '你好！我是同盛祥的金牌店长小同 👨‍🍳 想吃啥？第一次来我推荐招牌牛肉泡馍配糖蒜+冰峰，人均 40 上下；要清淡的给您配凉皮+酸梅汤。'
             session_service.add(uid, 'assistant', reply)
             return {'reply': reply, 'intent': intent, 'order': None}
 
         # ============ 菜单快路径 ============
         from services.rag_service import chat_with_rag_stream
+        import time as _t
+        _t0 = _t.time()
         answer = ''.join(chat_with_rag_stream(message))
+        _elapsed = (_t.time() - _t0) * 1000
         cleaned = self._clean(answer)
+
+        # 写 RAG 评估日志
+        try:
+            from services.rag_eval_service import rag_eval_service
+            rag_eval_service.log(
+                question=message, answer=cleaned,
+                hit_count=0, elapsed_ms=_elapsed, uid=uid,
+            )
+        except Exception as e:
+            logger.warning(f'RAG 日志写入失败: {e}')
+
         session_service.add(uid, 'assistant', cleaned)
         return {'reply': cleaned, 'intent': intent, 'order': None}
 
@@ -707,8 +1188,9 @@ class ChatService:
         session_service.add(uid, 'user', message)
 
         # 意图识别
-        result = intent_service.classify_intent(message, history=history_text)
+        result = self._get_intent_result(message, history_text=history_text)
         intent = result['intent']
+        items = result.get('items', [])
         logger.info(f"[Chat-Stream] uid={uid} 用户: {message} | 意图: {intent}")
 
         yield ('meta', {'intent': intent})
@@ -758,7 +1240,6 @@ class ChatService:
             # 解腻/搭配
             '解腻': '凉皮或糖蒜都很解腻，再喝口酸梅汤，比冰峰更清爽。',
             '搭配': '凉皮或糖蒜都很解腻，再喝口酸梅汤，比冰峰更清爽。',
-            '推荐': '第一次来推荐招牌牛肉泡馍(小份) + 凉拌牛腱 + 冰峰汽水，人均 40 上下。',
             # 健康
             '孕妇': '孕期饮食建议以医嘱为准，来店里可以告诉店员您的忌口，我们帮您调整汤的油盐量。',
             '糖尿病': '健康问题请以医嘱为准，来店里可以告诉店员您的忌口，我们帮您调整汤的油盐量。',
@@ -787,6 +1268,26 @@ class ChatService:
             yield ('text', reply)
             yield ('done', None)
             return
+
+        # ============ 待留言状态：直接进留言分支 ============
+        if session_service.is_pending_message(uid):
+            reply = self._handle_leave_message(message, uid, hint=result)
+            session_service.add(uid, 'assistant', reply)
+            yield ('text', reply)
+            yield ('done', None)
+            return
+
+        # ============ 未知菜名检测（防幻觉，所有意图）============
+        if intent not in ('cancel_order', 'cancel_all', 'modify_order', 'chat',
+                          'recommend', 'query_total', 'leave_message',
+                          'accept_recommend', 'reject_recommend'):
+            unknown = self._detect_unknown_dish(message)
+            if unknown:
+                reply = f'菜单里没有「{unknown}」哦～ 我们的招牌是牛肉泡馍、羊肉泡馍、优质羊肉泡馍，还有凉皮、糖蒜、冰峰汽水。想吃哪种？'
+                session_service.add(uid, 'assistant', reply)
+                yield ('text', reply)
+                yield ('done', None)
+                return
 
         # ============ 会话聚合查询 ============
         if intent == 'query_total':
@@ -834,27 +1335,6 @@ class ChatService:
             yield ('done', None)
             return
 
-        # ============ 会话聚合查询 ============
-        if intent == 'query_total':
-            orders = session_service.get_orders(uid)
-            if orders:
-                total_sum = sum(o['total'] for o in orders)
-                lines = ['您这次一共下了 ' + str(len(orders)) + ' 单，合计 '
-                         + f'{total_sum:.2f}' + ' 元：']
-                for i, o in enumerate(orders, 1):
-                    items_str = '、'.join(
-                        f"{it['name']}×{it['qty']}"
-                        for it in o.get('items', []))
-                    lines.append(f'  {i}. {items_str} = {o["total"]:.2f} 元')
-                reply = '\n'.join(lines)
-            else:
-                reply = '您这次会话还没下单哦～想吃点什么？'
-            session_service.add(uid, 'assistant', reply)
-            yield ('text', reply)
-            yield ('done', None)
-            return
-
-
         # ============ 批量取消 ============
         if intent == 'cancel_all':
             reply = self._handle_cancel_all(uid)
@@ -865,7 +1345,15 @@ class ChatService:
 
         # ============ 取消订单 ============
         if intent == 'cancel_order':
-            reply = self._handle_cancel_order(uid, message)
+            reply = self._handle_cancel_order(uid, message, hint=result)
+            session_service.add(uid, 'assistant', reply)
+            yield ('text', reply)
+            yield ('done', None)
+            return
+
+        # ============ 留言 ============
+        if intent == 'leave_message' or session_service.is_pending_message(uid):
+            reply = self._handle_leave_message(message, uid, hint=result)
             session_service.add(uid, 'assistant', reply)
             yield ('text', reply)
             yield ('done', None)
@@ -874,6 +1362,53 @@ class ChatService:
         # ============ 推荐 ============
         if intent == 'recommend':
             reply = self._handle_recommend(message, uid)
+            dishes = self._extract_dishes_from_text(reply)
+            if dishes and uid:
+                session_service.set_last_recommend(uid, reply, dishes)
+            session_service.add(uid, 'assistant', reply)
+            yield ('text', reply)
+            yield ('done', None)
+            return
+
+        # ============ 接受推荐（"就这个"）============
+        if intent == 'accept_recommend':
+            last = session_service.get_last_recommend(uid)
+            if not last or not last.get('items'):
+                reply = '好的！那您具体想吃哪道菜？直接说菜名就行～'
+                session_service.add(uid, 'assistant', reply)
+                yield ('text', reply)
+                yield ('done', None)
+                return
+            if not uid:
+                reply = '下单前请先登录哦～ 点底部「我的」→「立即登录」。'
+                session_service.add(uid, 'assistant', reply)
+                yield ('meta', {'intent': intent, 'need_login': True})
+                yield ('text', reply)
+                yield ('done', None)
+                return
+            try:
+                order_result = order_service.create(last['items'], table_no=table_no, uid=uid)
+                reply = '好嘞，就按刚才推荐的给您下：\n' + order_service.format_reply(order_result)
+                session_service.add(uid, 'assistant', reply)
+                session_service.add_order(uid, order_result['order'])
+                session_service.clear_last_recommend(uid)
+                yield ('meta', {'intent': 'place_order', 'order': order_result['order']})
+                yield ('text', reply)
+                yield ('done', None)
+                return
+            except Exception as e:
+                session_service.add(uid, 'assistant', str(e))
+                yield ('text', str(e))
+                yield ('done', None)
+                return
+
+        # ============ 拒绝推荐（"换一个"）============
+        if intent == 'reject_recommend':
+            session_service.clear_last_recommend(uid)
+            reply = self._handle_recommend(message + ' 换一批不一样的', uid)
+            dishes = self._extract_dishes_from_text(reply)
+            if dishes and uid:
+                session_service.set_last_recommend(uid, reply, dishes)
             session_service.add(uid, 'assistant', reply)
             yield ('text', reply)
             yield ('done', None)
@@ -881,7 +1416,7 @@ class ChatService:
 
         # ============ 修改订单 ============
         if intent == 'modify_order':
-            reply = self._handle_modify_order(uid, message)
+            reply = self._handle_modify_order(uid, message, hint=result)
             session_service.add(uid, 'assistant', reply)
             yield ('text', reply)
             yield ('done', None)
@@ -898,14 +1433,17 @@ class ChatService:
                 return
 
             # 模糊菜名检测
-            vague = self._is_vague_dish(message)
-            if vague and len(vague) > 1:
-                opts = '、'.join('「' + v + '」' for v in vague[:4])
-                reply = f'您想点的是哪一种？我们这儿有 {opts}，请说得具体些～'
-                session_service.add(uid, 'assistant', reply)
-                yield ('text', reply)
-                yield ('done', None)
-                return
+            if items:
+                pass  # LLM 已给精确结果
+            else:
+                vague = self._is_vague_dish(message)
+                if vague and len(vague) > 1:
+                    opts = '、'.join('「' + v + '」' for v in vague[:4])
+                    reply = f'您想点的是哪一种？我们这儿有 {opts}，请说得具体些～'
+                    session_service.add(uid, 'assistant', reply)
+                    yield ('text', reply)
+                    yield ('done', None)
+                    return
 
             items = self._extract_items_from_text(message)
 
@@ -957,9 +1495,9 @@ class ChatService:
         if intent == 'chat':
             # 判断是不是"好的/嗯/行"等确认词
             if message.strip() in ('好的', '好呀', '好嘞', '行吧', '可以', '嗯', 'OK', 'ok'):
-                reply = '好嘞！需要我帮您下单吗？可以告诉我菜品名字和份数，比如「来一份牛肉泡馍」。'
+                reply = '好嘞！那要吃点啥？招牌牛肉泡馍配糖蒜和冰峰最巴适，或者来份套餐更划算，我给您配上？'
             else:
-                reply = '你好！我是同盛祥的小助手，可以问我菜单、营业时间、门店地址，也可以直接点菜。'
+                reply = '你好！我是同盛祥的金牌店长小同 👨‍🍳 想吃啥？第一次来我推荐招牌牛肉泡馍配糖蒜+冰峰，人均 40 上下；要清淡的给您配凉皮+酸梅汤。'
             session_service.add(uid, 'assistant', reply)
             yield ('text', reply)
             yield ('done', None)
@@ -967,12 +1505,25 @@ class ChatService:
 
         # ============ RAG（通用问题） ============
         from services.rag_service import chat_with_rag_stream
+        import time as _t
+        _t0 = _t.time()
         full_reply = ''
         for chunk in chat_with_rag_stream(message):
             full_reply += chunk
             yield ('text', chunk)
+        _elapsed = (_t.time() - _t0) * 1000
 
         cleaned = self._clean(full_reply)
+
+        try:
+            from services.rag_eval_service import rag_eval_service
+            rag_eval_service.log(
+                question=message, answer=cleaned,
+                hit_count=0, elapsed_ms=_elapsed, uid=uid,
+            )
+        except Exception as e:
+            logger.warning(f'RAG 日志写入失败: {e}')
+
         session_service.add(uid, 'assistant', cleaned)
         yield ('done', None)
 

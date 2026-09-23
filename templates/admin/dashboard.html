@@ -108,6 +108,43 @@
   </div>
 </div>
 
+<!-- ==================== 营业趋势 ==================== -->
+<div class="section-block">
+  <div class="chart-card">
+    <div class="chart-head">
+      <h3 class="chart-title chart-title-inline">营业额 & 订单趋势</h3>
+      <div class="chart-tabs">
+        <button class="chart-tab on" data-days="7">近 7 天</button>
+        <button class="chart-tab" data-days="30">近 30 天</button>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="chartTrend"></canvas></div>
+  </div>
+</div>
+
+<!-- ==================== 时段分析 ==================== -->
+<div class="chart-row">
+  <div class="chart-card">
+    <h3 class="chart-title">时段订单分布</h3>
+    <div class="chart-box"><canvas id="chartHours"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <h3 class="chart-title">周时段热力图</h3>
+    <div class="heatmap-wrap">
+      <div class="heatmap-grid" id="heatmapGrid"></div>
+      <div class="heatmap-legend">
+        <span>少</span>
+        <span class="hm-cell lv0"></span>
+        <span class="hm-cell lv1"></span>
+        <span class="hm-cell lv2"></span>
+        <span class="hm-cell lv3"></span>
+        <span class="hm-cell lv4"></span>
+        <span>多</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ==================== 环形图区 ==================== -->
 <div class="chart-row">
   <div class="chart-card">
@@ -164,6 +201,18 @@
       </a>
       <a href="/admin/tables" class="quick-card">
         <span class="qc-icon">🔳</span><span class="qc-text">生成桌码</span>
+      </a>
+      <a href="/admin/api/export/orders.xlsx" class="quick-card" target="_blank">
+        <span class="qc-icon">📥</span><span class="qc-text">导出订单</span>
+      </a>
+      <a href="/admin/api/export/points.xlsx" class="quick-card" target="_blank">
+        <span class="qc-icon">💎</span><span class="qc-text">导出积分</span>
+      </a>
+      <a href="/admin/api/export/orders.xlsx" class="quick-card" target="_blank">
+        <span class="qc-icon">📥</span><span class="qc-text">导出订单</span>
+      </a>
+      <a href="/admin/api/export/points.xlsx" class="quick-card" target="_blank">
+        <span class="qc-icon">💎</span><span class="qc-text">导出积分</span>
       </a>
     </div>
   </div>
@@ -236,7 +285,6 @@
   (function renderPageBars(){
     const box = document.getElementById('pageBarList');
     const raw = data.pages || {};
-    // 过滤脏路径 + 降序 + 取前 10
     const entries = Object.entries(raw)
       .filter(([k]) => k && !k.startsWith('//') && k !== '')
       .sort((a, b) => b[1] - a[1])
@@ -258,6 +306,160 @@
       </div>
     `).join('');
   })();
+
+  // ---------- 营业趋势 ----------
+  let trendChart = null;
+
+  async function loadTrend(days){
+    const r = await fetch('/admin/api/stats/trend?days=' + days);
+    const d = await r.json();
+    if (d.code !== 0) return;
+    const t = d.data;
+
+    // 折线 + 柱状 复合图
+    if (trendChart){ trendChart.destroy(); trendChart = null; }
+    const ctx = document.getElementById('chartTrend');
+    if (!ctx) return;
+
+    trendChart = new Chart(ctx, {
+      data: {
+        labels: t.days.map(s => s.slice(5)),
+        datasets: [
+          {
+            type: 'bar',
+            label: '订单数',
+            data: t.orders_by_day,
+            backgroundColor: 'rgba(59,130,246,.55)',
+            borderRadius: 4,
+            yAxisID: 'y1',
+            order: 2,
+          },
+          {
+            type: 'line',
+            label: '营业额 ¥',
+            data: t.revenue_by_day,
+            borderColor: '#EF4444',
+            backgroundColor: 'rgba(239,68,68,.10)',
+            borderWidth: 2.5,
+            tension: 0.35,
+            fill: true,
+            pointRadius: 3,
+            pointBackgroundColor: '#EF4444',
+            yAxisID: 'y',
+            order: 1,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { font: FONT, padding: 14, boxWidth: 12 } },
+          tooltip: { bodyFont: FONT, titleFont: FONT }
+        },
+        scales: {
+          y: {
+            type: 'linear',
+            position: 'left',
+            title: { display: true, text: '营业额 (¥)', font: FONT },
+            ticks: { font: FONT },
+            grid: { color: 'rgba(0,0,0,.05)' }
+          },
+          y1: {
+            type: 'linear',
+            position: 'right',
+            title: { display: true, text: '订单数', font: FONT },
+            ticks: { font: FONT, precision: 0 },
+            grid: { display: false }
+          },
+          x: { ticks: { font: FONT }, grid: { display: false } }
+        }
+      }
+    });
+
+    // 时段柱状
+    renderHours(t.orders_by_hour);
+
+    // 热力图
+    renderHeatmap(t.heatmap);
+  }
+
+  function renderHours(arr){
+    const el = document.getElementById('chartHours');
+    if (!el) return;
+    new Chart(el, {
+      type: 'bar',
+      data: {
+        labels: Array.from({length: 24}, (_, i) => i + '时'),
+        datasets: [{
+          label: '订单数',
+          data: arr,
+          backgroundColor: arr.map(v => {
+            if (v === 0) return 'rgba(156,163,175,.20)';
+            return 'rgba(59,130,246,' + Math.min(0.9, 0.35 + v / Math.max(...arr, 1) * 0.6) + ')';
+          }),
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { bodyFont: FONT, titleFont: FONT }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { font: FONT, precision: 0 }, grid: { color: 'rgba(0,0,0,.05)' } },
+          x: { ticks: { font: FONT, maxRotation: 0, autoSkip: true, autoSkipPadding: 20 }, grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  function renderHeatmap(matrix){
+    const grid = document.getElementById('heatmapGrid');
+    if (!grid) return;
+
+    const WD = ['一', '二', '三', '四', '五', '六', '日'];
+    let max = 0;
+    matrix.forEach(row => row.forEach(v => { if (v > max) max = v; }));
+
+    function level(v){
+      if (v === 0 || max === 0) return 'lv0';
+      const r = v / max;
+      if (r < 0.25) return 'lv1';
+      if (r < 0.5)  return 'lv2';
+      if (r < 0.75) return 'lv3';
+      return 'lv4';
+    }
+
+    let html = '<div class="hm-corner"></div>';
+    // 表头小时（每 3 小时显示一个）
+    for (let h = 0; h < 24; h++){
+      const label = (h % 3 === 0) ? h : '';
+      html += '<div class="hm-head">' + label + '</div>';
+    }
+    // 7 行
+    for (let w = 0; w < 7; w++){
+      html += '<div class="hm-week">' + WD[w] + '</div>';
+      for (let h = 0; h < 24; h++){
+        const v = matrix[w][h];
+        html += '<div class="hm-cell ' + level(v) + '" title="周' + WD[w] + ' ' + h + '时 · ' + v + ' 单"></div>';
+      }
+    }
+    grid.innerHTML = html;
+  }
+
+  // tab 切换
+  document.querySelectorAll('.chart-tab').forEach(btn => {
+    btn.onclick = function(){
+      document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      loadTrend(parseInt(btn.dataset.days, 10));
+    };
+  });
+
+  loadTrend(7);
 })();
 </script>
 {% endblock %}

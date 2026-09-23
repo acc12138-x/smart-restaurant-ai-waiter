@@ -32,6 +32,52 @@ def temp_data_dir(tmp_path):
     return str(data_dir)
 
 
+@pytest.fixture(autouse=True)
+def clean_stock_before_test():
+    """每个测试前把 menu.json 里的 stock 字段清掉（防测试互相扣库存）"""
+    import json
+    menu_path = os.path.join(ROOT, 'data', 'menu.json')
+    backup_path = menu_path + '.testbak'
+
+    if not os.path.exists(menu_path):
+        yield
+        return
+
+    # 备份
+    with open(menu_path, 'rb') as f:
+        original_bytes = f.read()
+
+    try:
+        # 清 stock
+        with open(menu_path, encoding='utf-8') as f:
+            menu = json.load(f)
+        for cat in menu:
+            for it in cat.get('items', []):
+                it.pop('stock', None)
+        with open(menu_path, 'w', encoding='utf-8') as f:
+            json.dump(menu, f, ensure_ascii=False, indent=2)
+
+        # 让 menu_service 重新加载
+        try:
+            from services.menu_service import menu_service
+            menu_service._cache = None
+            menu_service._cache_mtime = 0
+        except Exception:
+            pass
+
+        yield
+    finally:
+        # 恢复原始文件
+        with open(menu_path, 'wb') as f:
+            f.write(original_bytes)
+        try:
+            from services.menu_service import menu_service
+            menu_service._cache = None
+            menu_service._cache_mtime = 0
+        except Exception:
+            pass
+
+
 @pytest.fixture
 def client():
     """Flask 测试客户端"""

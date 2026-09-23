@@ -1,0 +1,385 @@
+{% extends "admin/base.html" %}
+{% set active = 'hero' %}
+{% block page_title %}首页 Hero 配置{% endblock %}
+{% block content %}
+
+<div class="hero-tip">
+  💡 每个视频对应一道菜，前台按顺序自动轮播。把视频拖到想要的位置即可调整顺序。
+</div>
+
+<div class="section-block">
+  <div class="kb-head">
+    <h2 class="block-h2" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">🎬 视频列表</h2>
+    <div style="display:flex;gap:8px;">
+      <input type="file" id="videoFile" accept="video/mp4,video/webm,video/quicktime" style="display:none;">
+      <button id="btnUpload" class="btn-blue">📤 上传视频</button>
+      <button id="btnAdd" class="btn-outline">＋ 手动添加</button>
+    </div>
+  </div>
+
+  <div class="hero-items" id="heroItems">
+    <p class="muted">加载中…</p>
+  </div>
+</div>
+
+<div class="section-block">
+  <h2 class="block-h2">🔖 底部 3 个标签</h2>
+  <p class="hero-hint">每个标签点击后跳转菜单对应分类。最多 3 个。</p>
+  <div id="labelList" class="hero-labels-form"></div>
+</div>
+
+<div class="section-block">
+  <h2 class="block-h2">⚙️ 播放设置</h2>
+  <div class="settings-row">
+    <label class="settings-label">每段停留时长</label>
+    <div class="settings-input">
+      <input type="number" id="autoplayMs" min="2000" max="30000" step="500" style="width:140px;">
+      <span class="settings-hint inline">毫秒（建议 5000 - 10000）</span>
+    </div>
+  </div>
+</div>
+
+<div class="settings-save-bar">
+  <button class="btn-blue" id="btnSave">💾 保存配置</button>
+  <span id="saveMsg" class="settings-save-msg"></span>
+</div>
+
+<!-- 手动添加菜品弹窗 -->
+<div class="modal" id="itemModal">
+  <div class="modal-panel" style="width:min(480px,92vw);">
+    <div class="modal-head">
+      <h3 id="imTitle">添加视频</h3>
+      <button class="modal-close" onclick="closeItemModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="nf-label">菜品名</label>
+      <select id="imDish" class="nf-input"></select>
+
+      <label class="nf-label" style="margin-top:12px;">视频路径</label>
+      <input type="text" id="imVideo" class="nf-input" placeholder="/static/video/hero/xxx.mp4">
+      <p class="nf-tip">点上方"📤 上传视频"上传后自动填入；或手动填写已存在的路径</p>
+
+      <label class="nf-label" style="margin-top:12px;">所属分类（可选）</label>
+      <input type="text" id="imLabel" class="nf-input" placeholder="如：招牌泡馍" maxlength="20">
+
+      <p id="imMsg" class="auth-msg"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-outline" onclick="closeItemModal()">取消</button>
+      <button class="btn-blue" id="imConfirm">确定</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block script %}
+<script>
+var allItems = [];
+var allLabels = [];
+var menuCategories = [];
+var editingIndex = -1;
+var dragSrcIndex = -1;
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+// ============ 加载 ============
+async function loadHero(){
+  var r = await fetch('/admin/api/hero');
+  var d = await r.json();
+  if (d.code !== 0){ alert('加载失败'); return; }
+  allItems  = d.data.items  || [];
+  allLabels = d.data.labels || [];
+  document.getElementById('autoplayMs').value = d.data.autoplay_ms || 8000;
+  renderItems();
+  renderLabels();
+}
+
+async function loadMenuCategories(){
+  var r = await fetch('/admin/api/menu');
+  var d = await r.json();
+  if (d.code !== 0) return;
+  menuCategories = (d.data || []).map(function(c){ return c.category; });
+  // 填充下拉
+  var sel = document.getElementById('imDish');
+  var allDishes = [];
+  (d.data || []).forEach(function(cat){
+    (cat.items || []).forEach(function(it){
+      allDishes.push(it.name);
+    });
+  });
+  sel.innerHTML = allDishes.map(function(n){
+    return '<option value="' + esc(n) + '">' + esc(n) + '</option>';
+  }).join('');
+  // 填充底部标签下拉用的分类
+}
+
+// ============ 渲染视频列表 ============
+function renderItems(){
+  var box = document.getElementById('heroItems');
+  if (!allItems.length){
+    box.innerHTML = '<p class="muted">还没有视频，点右上角"📤 上传视频"添加</p>';
+    return;
+  }
+  box.innerHTML = allItems.map(function(it, i){
+    return '<div class="hero-item-row" draggable="true" data-index="' + i + '">' +
+      '<span class="drag-handle" title="拖动排序">☰</span>' +
+      '<div class="hero-thumb">' +
+        '<video src="' + esc(it.video) + '" muted preload="metadata"></video>' +
+      '</div>' +
+      '<div class="hero-meta">' +
+        '<div class="hero-dish">' + esc(it.dish) + '</div>' +
+        '<div class="hero-path">' + esc(it.video) + '</div>' +
+        (it.label ? '<span class="hero-cat">' + esc(it.label) + '</span>' : '') +
+      '</div>' +
+      '<div class="hero-ops">' +
+        '<button class="btn-mini js-edit" data-i="' + i + '">编辑</button>' +
+        '<button class="btn-mini ghost js-del" data-i="' + i + '">删除</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // 绑定事件
+  box.querySelectorAll('.js-edit').forEach(function(b){
+    b.onclick = function(){ editItem(parseInt(b.dataset.i, 10)); };
+  });
+  box.querySelectorAll('.js-del').forEach(function(b){
+    b.onclick = function(){
+      var i = parseInt(b.dataset.i, 10);
+      if (!confirm('删除 "' + allItems[i].dish + '" ？')) return;
+      allItems.splice(i, 1);
+      renderItems();
+    };
+  });
+
+  // 拖拽
+  box.querySelectorAll('.hero-item-row').forEach(function(row){
+    row.addEventListener('dragstart', function(e){
+      dragSrcIndex = parseInt(row.dataset.index, 10);
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', function(){
+      row.classList.remove('dragging');
+      box.querySelectorAll('.hero-item-row').forEach(function(r){
+        r.classList.remove('drag-over');
+      });
+    });
+    row.addEventListener('dragover', function(e){
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      row.classList.add('drag-over');
+    });
+    row.addEventListener('dragleave', function(){
+      row.classList.remove('drag-over');
+    });
+    row.addEventListener('drop', function(e){
+      e.preventDefault();
+      var targetIndex = parseInt(row.dataset.index, 10);
+      if (dragSrcIndex < 0 || dragSrcIndex === targetIndex) return;
+      var moved = allItems.splice(dragSrcIndex, 1)[0];
+      allItems.splice(targetIndex, 0, moved);
+      dragSrcIndex = -1;
+      renderItems();
+    });
+  });
+}
+
+// ============ 渲染底部标签 ============
+function renderLabels(){
+  var box = document.getElementById('labelList');
+  var html = '';
+  for (var i = 0; i < 3; i++){
+    var lb = allLabels[i] || {name: '', category: ''};
+    html +=
+      '<div class="hero-label-row">' +
+        '<span class="hero-label-idx">' + (i + 1) + '</span>' +
+        '<input type="text" class="nf-input" data-idx="' + i + '" data-field="name" ' +
+               'value="' + esc(lb.name) + '" placeholder="显示名，如 招牌泡馍" maxlength="10">' +
+        '<select class="nf-input" data-idx="' + i + '" data-field="category">' +
+          '<option value="">— 关联分类 —</option>' +
+          menuCategories.map(function(c){
+            var sel = c === lb.category ? ' selected' : '';
+            return '<option value="' + esc(c) + '"' + sel + '>' + esc(c) + '</option>';
+          }).join('') +
+        '</select>' +
+      '</div>';
+  }
+  box.innerHTML = html;
+
+  // 输入事件同步到 allLabels
+  box.querySelectorAll('input, select').forEach(function(el){
+    el.oninput = el.onchange = function(){
+      var idx = parseInt(el.dataset.idx, 10);
+      var field = el.dataset.field;
+      if (!allLabels[idx]) allLabels[idx] = {name: '', category: ''};
+      allLabels[idx][field] = el.value.trim();
+    };
+  });
+}
+
+// ============ 上传视频 ============
+document.getElementById('btnUpload').onclick = function(){
+  document.getElementById('videoFile').click();
+};
+
+document.getElementById('videoFile').onchange = async function(){
+  var f = this.files[0];
+  if (!f) return;
+
+  if (f.size > 20 * 1024 * 1024){
+    if (!confirm('文件 ' + (f.size / 1024 / 1024).toFixed(1) + 'MB 超过 20MB，可能影响加载。继续？')) return;
+  }
+
+  var btn = document.getElementById('btnUpload');
+  var orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '上传中 0%…';
+
+  var fd = new FormData();
+  fd.append('file', f);
+
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/admin/api/hero/upload');
+
+    var result = await new Promise(function(resolve, reject){
+      xhr.upload.onprogress = function(e){
+        if (e.lengthComputable){
+          var pct = Math.round(e.loaded / e.total * 100);
+          btn.textContent = '上传中 ' + pct + '%…';
+        }
+      };
+      xhr.onload = function(){
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch(e){ reject(e); }
+      };
+      xhr.onerror = function(){ reject(new Error('网络错误')); };
+      xhr.send(fd);
+    });
+
+    if (result.code === 0){
+      openItemModal(-1, {
+        dish: '',
+        video: result.data.video,
+        label: '',
+      });
+    } else {
+      alert(result.msg || '上传失败');
+    }
+  } catch(e){
+    alert('上传失败：' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+    document.getElementById('videoFile').value = '';
+  }
+};
+
+// ============ 手动添加 / 编辑 ============
+document.getElementById('btnAdd').onclick = function(){ openItemModal(-1, null); };
+
+function openItemModal(index, preset){
+  editingIndex = index;
+  var it = preset || (index >= 0 ? allItems[index] : {dish: '', video: '', label: ''});
+
+  document.getElementById('imTitle').textContent = index >= 0 ? '编辑视频' : '添加视频';
+  document.getElementById('imVideo').value = it.video || '';
+  document.getElementById('imLabel').value = it.label || '';
+  document.getElementById('imMsg').textContent = '';
+
+  // 填充菜品下拉
+  var sel = document.getElementById('imDish');
+  if (it.dish){
+    var found = false;
+    for (var i = 0; i < sel.options.length; i++){
+      if (sel.options[i].value === it.dish){ sel.selectedIndex = i; found = true; break; }
+    }
+    if (!found){
+      sel.innerHTML += '<option value="' + esc(it.dish) + '" selected>' + esc(it.dish) + '</option>';
+    }
+  }
+
+  document.getElementById('itemModal').classList.add('show');
+}
+
+function closeItemModal(){
+  document.getElementById('itemModal').classList.remove('show');
+  editingIndex = -1;
+}
+
+document.getElementById('itemModal').onclick = function(e){
+  if (e.target.id === 'itemModal') closeItemModal();
+};
+
+document.getElementById('imConfirm').onclick = function(){
+  var dish  = document.getElementById('imDish').value.trim();
+  var video = document.getElementById('imVideo').value.trim();
+  var label = document.getElementById('imLabel').value.trim();
+  var msg   = document.getElementById('imMsg');
+
+  if (!dish){ msg.textContent = '请选菜品'; return; }
+  if (!video){ msg.textContent = '请填视频路径'; return; }
+
+  var item = {dish: dish, video: video, label: label};
+  if (editingIndex >= 0){
+    allItems[editingIndex] = item;
+  } else {
+    allItems.push(item);
+  }
+  closeItemModal();
+  renderItems();
+};
+
+// ============ 保存 ============
+document.getElementById('btnSave').onclick = async function(){
+  var btn = this;
+  var msg = document.getElementById('saveMsg');
+  var autoplay = parseInt(document.getElementById('autoplayMs').value, 10) || 8000;
+
+  // 过滤空标签
+  var cleanLabels = allLabels.filter(function(lb){
+    return lb && lb.name && lb.category;
+  }).slice(0, 3);
+
+  btn.disabled = true;
+  btn.textContent = '保存中…';
+
+  try {
+    var r = await fetch('/admin/api/hero', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        items: allItems,
+        labels: cleanLabels,
+        autoplay_ms: autoplay,
+      })
+    });
+    var d = await r.json();
+    if (d.code === 0){
+      msg.style.color = '#059669';
+      msg.textContent = '✓ 已保存';
+      setTimeout(function(){ msg.textContent = ''; }, 2500);
+    } else {
+      msg.style.color = '#DC2626';
+      msg.textContent = '✗ ' + (d.msg || '保存失败');
+    }
+  } catch(e){
+    msg.style.color = '#DC2626';
+    msg.textContent = '✗ 网络错误';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 保存配置';
+  }
+};
+
+// ============ 启动 ============
+(async function(){
+  await loadMenuCategories();
+  await loadHero();
+})();
+</script>
+{% endblock %}

@@ -16,11 +16,6 @@ def menu_page():
     return render_template('menu.html')
 
 
-@page_bp.route('/location')
-def location_page():
-    return render_template('location.html')
-
-
 @page_bp.route('/chat')
 def chat_page():
     return render_template('chat.html')

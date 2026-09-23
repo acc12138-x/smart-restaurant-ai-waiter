@@ -1,0 +1,284 @@
+{% extends "admin/base.html" %}
+{% set active = 'live' %}
+{% block page_title %}实时订单{% endblock %}
+{% block content %}
+
+<div class="live-bar">
+  <div class="live-status">
+    <span class="live-dot" id="liveDot"></span>
+    <span id="liveStatus">连接中…</span>
+  </div>
+  <div class="live-count" id="liveCount"></div>
+</div>
+
+<div class="live-tabs" id="liveTabs">
+  <button class="live-tab on" data-tab="pending">🔔 待处理 <b id="tabPending">0</b></button>
+  <button class="live-tab" data-tab="cooking">🔥 制作中 <b id="tabCooking">0</b></button>
+  <button class="live-tab" data-tab="done">✅ 已完成 <b id="tabDone">0</b></button>
+  <button class="live-tab" data-tab="all">📋 全部 <b id="tabAll">0</b></button>
+</div>
+
+<div class="live-tip" id="audioTip">
+  🔊 点任意位置开启提示音（浏览器要求先交互一次）
+</div>
+
+<div class="live-grid" id="liveGrid">
+  <div class="live-empty"><div class="live-empty-icon">🍜</div><p>加载中…</p></div>
+</div>
+
+{% endblock %}
+{% block script %}
+<script>
+(function(){
+  var seenIds = null;
+  var allOrders = [];
+  var currentTab = 'pending';
+
+  var grid = document.getElementById('liveGrid');
+  var statusEl = document.getElementById('liveStatus');
+  var dotEl = document.getElementById('liveDot');
+  var liveCount = document.getElementById('liveCount');
+  var audioTip = document.getElementById('audioTip');
+
+  // ---------- 音频 ----------
+  var audioCtx = null;
+  function initAudio(){
+    if (audioCtx) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioTip.style.display = 'none';
+    } catch(e){}
+  }
+  document.addEventListener('click', initAudio, { once: true });
+  document.addEventListener('touchstart', initAudio, { once: true });
+
+  function beep(){
+    if (!audioCtx) return;
+    try {
+      var o = audioCtx.createOscillator();
+      var g = audioCtx.createGain();
+      o.connect(g); g.connect(audioCtx.destination);
+      o.type = 'sine';
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.35, audioCtx.currentTime + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
+      o.start(audioCtx.currentTime);
+      o.stop(audioCtx.currentTime + 0.65);
+    } catch(e){}
+  }
+
+  // ---------- 工具 ----------
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function timeAgo(created){
+    if (!created) return '';
+    try {
+      var t = new Date(created.replace(/-/g, '/')).getTime();
+      var dt = (Date.now() - t) / 1000;
+      if (dt < 60) return '刚刚';
+      if (dt < 3600) return Math.floor(dt / 60) + ' 分钟前';
+      if (dt < 86400) return Math.floor(dt / 3600) + ' 小时前';
+      return Math.floor(dt / 86400) + ' 天前';
+    } catch(e){ return ''; }
+  }
+
+  var STATUS_LABEL = {
+    pending:   '待处理',
+    paid:      '已付款',
+    cooking:   '制作中',
+    done:      '已完成',
+    cancelled: '已取消'
+  };
+  var STATUS_CLASS = {
+    pending:   's-pending',
+    paid:      's-paid',
+    cooking:   's-cooking',
+    done:      's-done',
+    cancelled: 's-cancelled'
+  };
+  var TAB_FILTER = {
+    pending:   ['pending', 'paid'],
+    cooking:   ['cooking'],
+    done:      ['done'],
+    all:       null
+  };
+
+  function cardHtml(o, isNew){
+    var itemsHtml = (o.items || []).map(function(it){
+      return '<div class="lc-item"><span>' + esc(it.name) +
+             '</span><span>×' + (it.qty || 1) + '</span></div>';
+    }).join('');
+
+    var st = o.status || 'pending';
+    var statusBadge = '<span class="lc-status ' + (STATUS_CLASS[st] || 's-pending') +
+                      '">' + (STATUS_LABEL[st] || st) + '</span>';
+
+    // 不同状态不同按钮
+    var btn = '';
+    if (st === 'pending' || st === 'paid'){
+      btn = '<button class="lc-done" data-id="' + esc(o.id) + '">已处理</button>';
+    } else if (st === 'cooking'){
+      btn = '<button class="lc-done lc-done-green" data-id="' + esc(o.id) + '">已完成</button>';
+    } else if (st === 'done'){
+      btn = '<span class="lc-done-static">✓ 已完成</span>';
+    } else if (st === 'cancelled'){
+      btn = '<span class="lc-done-static lc-cancelled">✗ 已取消</span>';
+    }
+
+    return '<div class="live-card ' + (STATUS_CLASS[st] || '') +
+           (isNew ? ' is-new' : '') +
+           '" data-id="' + esc(o.id) + '">' +
+      '<div class="lc-head">' +
+        '<span class="lc-table">' + esc(o.table_no || '外带') + '</span>' +
+        '<span class="lc-time">' + esc(timeAgo(o.created_at)) + '</span>' +
+      '</div>' +
+      '<div class="lc-id">' + esc(o.id) + ' ' + statusBadge + '</div>' +
+      '<div class="lc-items">' + itemsHtml + '</div>' +
+      '<div class="lc-foot">' +
+        '<span class="lc-total">¥' + (o.total || 0) + '</span>' +
+        btn +
+      '</div>' +
+    '</div>';
+  }
+
+  function filterOrders(tab){
+    var orders = allOrders;
+    var allow = TAB_FILTER[tab];
+    if (allow){
+      orders = orders.filter(function(o){
+        return allow.indexOf(o.status) !== -1;
+      });
+    }
+    return orders;
+  }
+
+  function render(){
+    var orders = filterOrders(currentTab);
+    if (!orders.length){
+      grid.innerHTML = '<div class="live-empty"><div class="live-empty-icon">🍜</div><p>暂时没有订单</p></div>';
+      return;
+    }
+    grid.innerHTML = orders.map(function(o){ return cardHtml(o, false); }).join('');
+    bindButtons();
+  }
+
+  function countByTab(tab){
+    var allow = TAB_FILTER[tab];
+    if (!allow) return allOrders.length;
+    var n = 0;
+    for (var i = 0; i < allOrders.length; i++){
+      if (allow.indexOf(allOrders[i].status) !== -1) n++;
+    }
+    return n;
+  }
+
+  function updateCounts(){
+    document.getElementById('tabPending').textContent = countByTab('pending');
+    document.getElementById('tabCooking').textContent = countByTab('cooking');
+    document.getElementById('tabDone').textContent    = countByTab('done');
+    document.getElementById('tabAll').textContent     = allOrders.length;
+
+    liveCount.innerHTML = '当前 ' + countByTab(currentTab) + ' 单';
+  }
+
+  function bindButtons(){
+    grid.querySelectorAll('.lc-done').forEach(function(b){
+      b.onclick = function(){
+        var id = b.dataset.id;
+        var card = b.closest('.live-card');
+        var st = card.classList.contains('s-cooking') ? 'done' : 'cooking';
+        var label = st === 'done' ? '已完成' : '制作中';
+        if (!confirm('把订单 ' + id + ' 标记为「' + label + '」？')) return;
+        b.disabled = true;
+        b.textContent = '处理中…';
+        fetch('/admin/api/orders/' + encodeURIComponent(id) + '/status', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({status: st})
+        }).then(function(r){ return r.json(); }).then(function(d){
+          if (d.code === 0){
+            // 不用等 SSE，本地直接更新状态
+            for (var i = 0; i < allOrders.length; i++){
+              if (allOrders[i].id === id){ allOrders[i].status = st; break; }
+            }
+            updateCounts();
+            render();
+          } else {
+            alert(d.msg || '操作失败');
+            b.disabled = false;
+            b.textContent = '已处理';
+          }
+        }).catch(function(){
+          alert('网络错误');
+          b.disabled = false;
+          b.textContent = '已处理';
+        });
+      };
+    });
+  }
+
+  // ---------- 状态 tab ----------
+  document.querySelectorAll('.live-tab').forEach(function(tab){
+    tab.onclick = function(){
+      document.querySelectorAll('.live-tab').forEach(function(t){
+        t.classList.remove('on');
+      });
+      tab.classList.add('on');
+      currentTab = tab.dataset.tab;
+      updateCounts();
+      render();
+    };
+  });
+
+  // ---------- SSE ----------
+  function connect(){
+    var es = new EventSource('/admin/api/orders/stream');
+
+    es.addEventListener('hello', function(){
+      statusEl.textContent = '已连接';
+      dotEl.classList.add('on');
+    });
+
+    es.addEventListener('orders', function(ev){
+      var d = {};
+      try { d = JSON.parse(ev.data); } catch(e){ return; }
+      var orders = d.orders || [];
+
+      var incoming = orders.map(function(o){ return o.id; });
+      var newIds = [];
+      if (seenIds === null){
+        seenIds = new Set(incoming);
+      } else {
+        incoming.forEach(function(id){
+          if (!seenIds.has(id)){ newIds.push(id); seenIds.add(id); }
+        });
+      }
+
+      allOrders = orders;
+      updateCounts();
+      render();
+
+      // 高亮新卡 + 响铃
+      if (newIds.length){
+        newIds.forEach(function(id){
+          var c = grid.querySelector('.live-card[data-id="' + id + '"]');
+          if (c) c.classList.add('is-new');
+        });
+        beep();
+      }
+    });
+
+    es.addEventListener('error', function(){
+      statusEl.textContent = '连接断开，重连中…';
+      dotEl.classList.remove('on');
+    });
+  }
+
+  connect();
+})();
+</script>
+{% endblock %}

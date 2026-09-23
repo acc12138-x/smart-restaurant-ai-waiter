@@ -1,4 +1,5 @@
 # app.py
+import os
 import gzip
 from flask import Flask, request
 from configs.config import get_config
@@ -60,6 +61,47 @@ def gzip_response(response):
 
 
 # ============================================
+# 慢请求监控（v3.8）
+# ============================================
+SLOW_THRESHOLD_MS = 3000
+
+
+@app.before_request
+def _mark_start():
+    from time import time
+    request._tsx_start = time()
+
+
+@app.after_request
+def _log_slow(response):
+    from time import time
+    t0 = getattr(request, '_tsx_start', None)
+    if t0 is None:
+        return response
+    if (response.content_type or '').startswith('text/event-stream'):
+        return response
+    elapsed = (time() - t0) * 1000
+    if elapsed >= SLOW_THRESHOLD_MS:
+        uid = None
+        try:
+            from flask import g
+            uid = getattr(g, 'uid', None)
+        except Exception:
+            pass
+        logger.warning(
+            '慢请求 %.0fms %s %s' % (elapsed, request.method, request.path),
+            extra={
+                'elapsed_ms': round(elapsed, 1),
+                'url': request.path,
+                'method': request.method,
+                'ip': request.remote_addr,
+                'uid': uid,
+            }
+        )
+    return response
+
+
+# ============================================
 # 全局异常处理
 # ============================================
 @app.errorhandler(BizError)
@@ -70,7 +112,15 @@ def handle_biz_error(e):
 
 @app.errorhandler(Exception)
 def handle_error(e):
-    logger.error(f"未捕获异常: {e}", exc_info=True)
+    logger.error(
+        '未捕获异常: %s %s %s' % (request.method, request.path, str(e)),
+        exc_info=True,
+        extra={
+            'url': request.path,
+            'method': request.method,
+            'ip': request.remote_addr,
+        }
+    )
     return error(500, '服务器内部错误')
 
 
@@ -117,10 +167,14 @@ def warmup():
         logger.warning(f"=== AI 预热失败（不影响其他功能）: {e} ===")
 
 # 模块加载时自动预热（Gunicorn 也会触发）
-try:
-    warmup()
-except Exception as e:
-    print(f"预热失败: {e}")
+# CI 环境设 SKIP_WARMUP=1 跳过（无 Ollama 时不拖时间）
+if os.environ.get('SKIP_WARMUP', '0') != '1':
+    try:
+        warmup()
+    except Exception as e:
+        print(f"预热失败: {e}")
+else:
+    print("[SKIP] SKIP_WARMUP=1，跳过 AI 预热")
 
 
 # ============================================

@@ -1,22 +1,29 @@
 {% extends "base.html" %}
 {% set active = 'chat' %}
-{% block title %}AI 客服 · 同盛祥{% endblock %}
+{% block title %}AI 店长 · 同盛祥{% endblock %}
 {% block content %}
 
 <header class="page-head">
-  <h1 class="page-title">问问老店</h1>
-  <p class="page-sub">AI 客服 · 基于门店知识库</p>
+  <h1 class="page-title">AI 店长</h1>
+  <p class="page-sub">金牌店长小同，帮您选菜点单</p>
 </header>
 
 <section class="chat-wrap">
   <div id="chatBox" class="chat-box">
+
     <div class="chat-msg bot">
-      <div class="chat-bubble">你好，我是同盛祥的小助手。想问菜单、营业时间还是门店故事？</div>
+      <div class="chat-avatar"><span class="emoji">✨</span></div>
+      <div class="chat-content">
+        <div class="chat-bubble welcome-bubble" id="welcomeBubble">您好呀，我是同盛祥的金牌店长小同 👨‍🍳<br><br>我能帮您：<br>　🍜 点菜 · 推荐 · 算价<br>　🏪 查门店 · 营业时间<br>　💬 给老店留言<br><br>第一次来？招牌牛肉泡馍配糖蒜+冰峰，人均 40 上下。<br>想吃啥，直接跟我说～</div>
+      </div>
     </div>
+
   </div>
 
   <form id="chatForm" class="chat-input-bar">
-    <input id="chatInput" class="chat-input" placeholder="想问点什么…" autocomplete="off">
+    <input id="chatInput" class="chat-input"
+           placeholder="想问点什么…" autocomplete="off"
+           aria-label="输入消息">
     <button class="chat-send" type="submit">发送</button>
   </form>
 </section>
@@ -30,53 +37,99 @@
   const input = document.getElementById('chatInput');
   const box   = document.getElementById('chatBox');
 
-  function addMsg(text, who){
-    const wrap = document.createElement('div');
-    wrap.className = 'chat-msg ' + who;
-    wrap.innerHTML = `<div class="chat-bubble">${text}</div>`;
-    box.appendChild(wrap);
-    box.scrollTop = box.scrollHeight;
-    return wrap;
+  // ---------- 工具 ----------
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
   }
-
-  function addOrderCard(order){
-    const wrap = document.createElement('div');
-    wrap.className = 'chat-msg bot';
-    const itemsHtml = order.items.map(it => `
-      <div class="oc-item">
-        <span>${it.name} × ${it.qty}</span>
-        <span>${it.subtotal} 元</span>
-      </div>
-    `).join('');
-    wrap.innerHTML = `
-      <div class="order-card">
-        <div class="oc-head">
-          <span class="oc-tag">订单已创建</span>
-          <span class="oc-status ${order.status}">${statusText(order.status)}</span>
-        </div>
-        <div class="oc-id">${order.id}</div>
-        <div class="oc-items">${itemsHtml}</div>
-        <div class="oc-foot">
-          <span>合计</span>
-          <b>${order.total} 元</b>
-        </div>
-      </div>
-    `;
-    box.appendChild(wrap);
+  function scrollDown(){
     box.scrollTop = box.scrollHeight;
   }
-
   function statusText(s){
-    const map = { pending:'待付款', paid:'已付款', cooking:'制作中', done:'已完成', cancelled:'已取消' };
+    const map = { pending:'待付款', paid:'已付款', cooking:'制作中',
+                  done:'已完成', cancelled:'已取消' };
     return map[s] || s;
   }
 
-  // ★ 打字机效果（关键：之前缺失这个函数）
+  // ---------- 添加消息 ----------
+  function addUserMsg(text){
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg user';
+    wrap.innerHTML =
+      '<div class="chat-content">' +
+        '<div class="chat-bubble">' + escapeHtml(text) + '</div>' +
+      '</div>' +
+      '<div class="chat-avatar"><span class="emoji">👤</span></div>';
+    box.appendChild(wrap);
+    scrollDown();
+    return wrap;
+  }
+
+  function addBotThinking(){
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg bot';
+    wrap.innerHTML =
+      '<div class="chat-avatar"><span class="emoji">✨</span></div>' +
+      '<div class="chat-content">' +
+        '<div class="chat-bubble thinking" role="status" aria-live="polite">' +
+          '<span class="thinking-text">AI 正在思考</span>' +
+          '<span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>' +
+          '<span class="emoji">🤔</span>' +
+        '</div>' +
+      '</div>';
+    box.appendChild(wrap);
+    scrollDown();
+    return wrap;
+  }
+
+  function addBotContent(){
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg bot';
+    wrap.innerHTML =
+      '<div class="chat-avatar"><span class="emoji">✨</span></div>' +
+      '<div class="chat-content">' +
+        '<div class="chat-bubble typing"></div>' +
+      '</div>';
+    box.appendChild(wrap);
+    scrollDown();
+    return wrap;
+  }
+
+  function renderOrderCard(order){
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg bot';
+    const itemsHtml = (order.items || []).map(function(it){
+      return '<div class="oc-item">' +
+        '<span>' + escapeHtml(it.name) + ' × ' + it.qty + '</span>' +
+        '<span>' + it.subtotal + ' 元</span></div>';
+    }).join('');
+    wrap.innerHTML =
+      '<div class="chat-avatar"><span class="emoji">✨</span></div>' +
+      '<div class="chat-content">' +
+        '<div class="order-card">' +
+          '<div class="oc-head">' +
+            '<span class="oc-tag">订单已创建</span>' +
+            '<span class="oc-status ' + order.status + '">' + statusText(order.status) + '</span>' +
+          '</div>' +
+          '<div class="oc-id">' + order.id + '</div>' +
+          '<div class="oc-items">' + itemsHtml + '</div>' +
+          '<div class="oc-foot">' +
+            '<span>合计</span><b>' + order.total + ' 元</b>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    box.appendChild(wrap);
+    scrollDown();
+    return wrap;
+  }
+
+  // ---------- 打字机 ----------
   function typewrite(el, text, delay){
-    return new Promise(resolve => {
+    return new Promise(function(resolve){
       if (!text){ resolve(); return; }
       let i = 0;
-      const timer = setInterval(() => {
+      const timer = setInterval(function(){
         if (i >= text.length){
           clearInterval(timer);
           resolve();
@@ -84,27 +137,50 @@
         }
         el.textContent += text[i];
         i++;
-        box.scrollTop = box.scrollHeight;
+        scrollDown();
       }, delay);
     });
   }
 
-  form.onsubmit = async (e) => {
+  // ---------- 主流程 ----------
+  let busy = false;
+
+  // ---------- 已登录用户：拉个性化欢迎语 ----------
+  (async function(){
+    if (!window.Auth || !Auth.isLogin()) return;
+    try {
+      var tk = Auth.getToken();
+      var resp = await fetch('/api/chat/welcome', {
+        headers: {'Authorization': 'Bearer ' + tk}
+      });
+      var d = await resp.json();
+      if (d.code === 0 && d.data && d.data.message) {
+        var b = document.getElementById('welcomeBubble');
+        if (b) { b.style.whiteSpace = 'pre-wrap'; b.textContent = d.data.message; }
+      }
+    } catch(e){}
+  })();
+
+  form.onsubmit = async function(e){
     e.preventDefault();
+    if (busy) return;
     const text = input.value.trim();
     if (!text) return;
 
-    addMsg(text, 'user');
+    busy = true;
+    addUserMsg(text);
     if (window.Track) Track.track('chat_message', { message: text });
 
     input.value = '';
     input.disabled = true;
 
-    const botMsg = addMsg('', 'bot');
-    const bubble = botMsg.querySelector('.chat-bubble');
+    const thinking = addBotThinking();
+
     let fullText = '';
     let orderData = null;
     let intent = '';
+    let contentWrap = null;
+    let bubbleEl = null;
 
     try {
       const token = localStorage.getItem('tsx-token') || '';
@@ -113,31 +189,28 @@
 
       const resp = await fetch('/api/chat/stream', {
         method: 'POST',
-        headers,
+        headers: headers,
         body: JSON.stringify({ message: text })
       });
 
-      const reader = resp.body.getReader();
+      const reader  = resp.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
 
       while (true){
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
+        const r = await reader.read();
+        if (r.done) break;
+        buffer += decoder.decode(r.value, { stream: true });
 
         const parts = buffer.split('\n\n');
         buffer = parts.pop() || '';
 
         for (const part of parts){
           const lines = part.split('\n');
-          let event = 'message';
-          let dataLine = '';
-
+          let event = 'message', dataLine = '';
           for (const line of lines){
-            if (line.startsWith('event: ')) event = line.slice(7).trim();
-            else if (line.startsWith('data: ')) dataLine = line.slice(6);
+            if (line.indexOf('event: ') === 0) event = line.slice(7).trim();
+            else if (line.indexOf('data: ') === 0) dataLine = line.slice(6);
           }
           if (!dataLine) continue;
 
@@ -148,37 +221,72 @@
             intent = payload.intent || '';
             if (payload.order) orderData = payload.order;
           } else if (event === 'text'){
-            await typewrite(bubble, payload.text, 20);
+            // 首个 token → 切到打字机模式
+            if (!bubbleEl){
+              if (thinking.parentNode) thinking.remove();
+              contentWrap = addBotContent();
+              bubbleEl = contentWrap.querySelector('.chat-bubble');
+            }
+            await typewrite(bubbleEl, payload.text, 18);
             fullText += payload.text;
           } else if (event === 'done'){
+            if (bubbleEl){
+              bubbleEl.classList.remove('typing');
+            }
             if (orderData){
-              botMsg.remove();
-              addOrderCard(orderData);
+              if (contentWrap && contentWrap.parentNode) contentWrap.remove();
+              renderOrderCard(orderData);
             }
           } else if (event === 'error'){
-            bubble.textContent = payload.msg || '出错了';
+            if (thinking.parentNode) thinking.remove();
+            if (!bubbleEl){
+              contentWrap = addBotContent();
+              bubbleEl = contentWrap.querySelector('.chat-bubble');
+            }
+            bubbleEl.classList.remove('typing');
+            bubbleEl.classList.add('error');
+            bubbleEl.textContent = payload.msg || '出错了';
           }
         }
       }
 
+      // 兜底：如果从没收到过 text
+      if (!bubbleEl && !orderData){
+        if (thinking.parentNode) thinking.remove();
+        contentWrap = addBotContent();
+        bubbleEl = contentWrap.querySelector('.chat-bubble');
+        bubbleEl.classList.remove('typing');
+        bubbleEl.textContent = '（没有回复）';
+      }
+
+      // 埋点
       if (window.Track){
         Track.track('chat_message', {
           message: text, intent: intent,
           is_order: !!orderData,
-          reply: fullText.slice(0, 50),
+          reply: fullText.slice(0, 50)
         });
         if (orderData){
           Track.track('order_created', {
-            order_id: orderData.id, total: orderData.total,
+            order_id: orderData.id, total: orderData.total
           });
         }
       }
-    } catch (err) {
+    } catch (err){
+      if (thinking.parentNode) thinking.remove();
+      const wrap = addBotContent();
+      const bubble = wrap.querySelector('.chat-bubble');
+      bubble.classList.remove('typing');
+      bubble.classList.add('error');
       bubble.textContent = '网络不太好，稍后再试';
+    } finally {
+      busy = false;
+      input.disabled = false;
+      // 桌面端自动 focus（方便继续打字）；触屏端不 focus（避免弹键盘遮挡）
+      if (!('ontouchstart' in window)) {
+        input.focus();
+      }
     }
-
-    input.disabled = false;
-    input.focus();
   };
 })();
 </script>

@@ -52,37 +52,66 @@
   var video   = document.getElementById('heroMedia');
   if (!section || !video) return;
 
+  // iOS 关键：强制静音 + 内联播放
+  video.muted = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.setAttribute('autoplay', '');
+  video.setAttribute('loop', '');
+
+  function fallbackToPoster() {
+    if (section.querySelector('img.hero-fallback')) return;
+    var poster = video.getAttribute('poster');
+    if (!poster) return;
+    var img = document.createElement('img');
+    img.src = poster;
+    img.className = 'hero-fallback';
+    img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
+    var pin = section.querySelector('.hero-pin');
+    if (pin) pin.appendChild(img);
+  }
+
+  video.addEventListener('error', function(){
+    console.log('[video] 加载失败，用 poster');
+    video.style.display = 'none';
+    fallbackToPoster();
+  });
+
+  function tryPlay(){
+    if (document.body.classList.contains('mode-elder')) return;
+    var p = video.play();
+    if (p && p.catch){
+      p.catch(function(err){
+        console.log('[video] play 被拒: ' + err.name);
+        fallbackToPoster();
+      });
+    }
+  }
+
   if ('IntersectionObserver' in window){
     var obs = new IntersectionObserver(function(entries){
       entries.forEach(function(entry){
-        if (entry.isIntersecting){
-          if (!document.body.classList.contains('mode-elder')){
-            video.play().catch(function(){});
-          }
-        } else {
-          video.pause();
-        }
+        if (entry.isIntersecting){ tryPlay(); }
+        else { video.pause(); }
       });
     }, { threshold: 0.2 });
     obs.observe(section);
   } else {
-    video.play().catch(function(){});
+    tryPlay();
   }
 
-  document.addEventListener('touchstart', function(){
-    if (!document.body.classList.contains('mode-elder')){
-      video.play().catch(function(){});
-    }
-  }, { once: true });
+  // iOS / 安卓兜底：任何交互后重试
+  ['touchstart','click','scroll'].forEach(function(evt){
+    document.addEventListener(evt, function(){ tryPlay(); },
+      { once: true, passive: true });
+  });
 
   document.addEventListener('click', function(e){
     if (e.target.closest('#modeToggle')){
       setTimeout(function(){
-        if (document.body.classList.contains('mode-elder')){
-          video.pause();
-        } else {
-          video.play().catch(function(){});
-        }
+        if (document.body.classList.contains('mode-elder')){ video.pause(); }
+        else { tryPlay(); }
       }, 80);
     }
   });
@@ -95,6 +124,16 @@
     var table = params.get('table');
     if (table) {
       localStorage.setItem('tsx-table', table);
+      try {
+        if (!sessionStorage.getItem('tsx-scan-' + table)) {
+          sessionStorage.setItem('tsx-scan-' + table, '1');
+          fetch('/api/table/scan', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({table_no: table})
+          }).catch(function(){});
+        }
+      } catch(e2) {}
       console.log('[QR] table =', table);
     }
   } catch(e) {}

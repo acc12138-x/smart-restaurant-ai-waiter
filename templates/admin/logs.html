@@ -1,28 +1,98 @@
 {% extends "admin/base.html" %}
 {% set active = 'logs' %}
-{% block page_title %}操作日志{% endblock %}
+{% block page_title %}日志监控{% endblock %}
 {% block content %}
 
-<div class="filter-bar">
-  <button id="btnRefresh" class="btn-blue">刷新</button>
-  <span id="totalCount" class="total-count"></span>
+<div class="log-tabs">
+  <button class="log-tab on" data-tab="op">📝 操作日志</button>
+  <button class="log-tab" data-tab="app">🖥 应用日志</button>
 </div>
 
-<div class="table-wrap">
-  <table class="data-table">
-    <thead>
-      <tr>
-        <th>时间</th><th>操作员</th><th>动作</th>
-        <th>目标</th><th>详情</th><th>IP</th>
-      </tr>
-    </thead>
-    <tbody id="logsBody">
-      <tr><td colspan="6" class="loading-cell">加载中…</td></tr>
-    </tbody>
-  </table>
+<!-- ==================== 操作日志 ==================== -->
+<div id="tab-op" class="log-pane">
+  <div class="filter-bar">
+    <button id="btnRefresh" class="btn-blue">刷新</button>
+    <span id="totalCount" class="total-count"></span>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>时间</th><th>操作员</th><th>动作</th><th>目标</th><th>详情</th><th>IP</th></tr>
+      </thead>
+      <tbody id="logsBody">
+        <tr><td colspan="6" class="loading-cell">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pager" id="pager"></div>
 </div>
 
-<div class="pager" id="pager"></div>
+<!-- ==================== 应用日志 ==================== -->
+<div id="tab-app" class="log-pane" style="display:none;">
+
+  <div class="kpi-grid kpi-grid-6">
+    <div class="kpi-card kpi-blue small">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-body">
+        <div class="kpi-label">总日志数</div>
+        <div class="kpi-value" id="stTotal">0</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-orange small">
+      <div class="kpi-icon">⚠️</div>
+      <div class="kpi-body">
+        <div class="kpi-label">WARNING</div>
+        <div class="kpi-value" id="stWarn">0</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-red small">
+      <div class="kpi-icon">❌</div>
+      <div class="kpi-body">
+        <div class="kpi-label">ERROR</div>
+        <div class="kpi-value" id="stErr">0</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-purple small">
+      <div class="kpi-icon">🐢</div>
+      <div class="kpi-body">
+        <div class="kpi-label">慢请求</div>
+        <div class="kpi-value" id="stSlow">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <h2 class="block-h2">🐢 慢请求 TOP 10</h2>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>耗时</th><th>方法</th><th>路径</th><th>IP</th><th>时间</th></tr>
+        </thead>
+        <tbody id="slowBody">
+          <tr><td colspan="5" class="loading-cell">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section-block">
+    <div class="kb-head">
+      <h2 class="block-h2" style="margin-bottom:0;border-bottom:none;padding-bottom:0;">📜 应用日志</h2>
+      <div style="display:flex;gap:8px;">
+        <select id="fLevel" class="nf-input" style="width:auto;padding:8px 12px;">
+          <option value="">全部级别</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+          <option value="CRITICAL">CRITICAL</option>
+        </select>
+        <button id="btnRefreshApp" class="btn-blue">刷新</button>
+      </div>
+    </div>
+    <div id="appLogList"></div>
+    <div class="pager" id="appPager"></div>
+  </div>
+
+</div>
 
 {% endblock %}
 {% block script %}
@@ -34,8 +104,24 @@ var ACTION_LABEL = {
   disable_user: '禁用用户',
   enable_user: '启用用户',
   mark_message_read: '标记留言已读',
+  settings_update: '保存设置',
+  create_table: '创建桌码',
+  delete_table: '删除桌码',
+  kb_rollback: '知识库回滚',
 };
 
+document.querySelectorAll('.log-tab').forEach(function(tab){
+  tab.onclick = function(){
+    document.querySelectorAll('.log-tab').forEach(function(t){ t.classList.remove('on'); });
+    tab.classList.add('on');
+    var which = tab.dataset.tab;
+    document.getElementById('tab-op').style.display  = which === 'op'  ? '' : 'none';
+    document.getElementById('tab-app').style.display = which === 'app' ? '' : 'none';
+    if (which === 'app'){ loadAppStats(); loadSlow(); loadAppLogs(1); }
+  };
+});
+
+// ==================== 操作日志 ====================
 var currentPage = 1;
 
 async function loadLogs(page) {
@@ -70,19 +156,112 @@ async function loadLogs(page) {
     '</tr>';
   }).join('');
 
-  renderPager(data);
+  renderPager('pager', data, 'loadLogs');
 }
 
-function renderPager(data) {
-  var p = document.getElementById('pager');
+function renderPager(id, data, fnName) {
+  var p = document.getElementById(id);
   if (data.pages <= 1) { p.innerHTML = ''; return; }
   p.innerHTML =
-    '<button ' + (data.page <= 1 ? 'disabled' : '') + ' onclick="loadLogs(' + (data.page - 1) + ')">上一页</button>' +
+    '<button ' + (data.page <= 1 ? 'disabled' : '') + ' onclick="' + fnName + '(' + (data.page - 1) + ')">上一页</button>' +
     '<span>' + data.page + ' / ' + data.pages + '</span>' +
-    '<button ' + (data.page >= data.pages ? 'disabled' : '') + ' onclick="loadLogs(' + (data.page + 1) + ')">下一页</button>';
+    '<button ' + (data.page >= data.pages ? 'disabled' : '') + ' onclick="' + fnName + '(' + (data.page + 1) + ')">下一页</button>';
 }
 
-document.getElementById('btnRefresh').onclick = function() { loadLogs(1); };
+// ==================== 应用日志 ====================
+async function loadAppStats(){
+  try {
+    var r = await fetch('/admin/api/app-logs/stats');
+    var d = await r.json();
+    if (d.code !== 0) return;
+    var s = d.data;
+    document.getElementById('stTotal').textContent = s.total;
+    document.getElementById('stWarn').textContent = (s.by_level || {}).WARNING || 0;
+    document.getElementById('stErr').textContent  = (s.by_level || {}).ERROR || 0;
+    document.getElementById('stSlow').textContent = s.slow_count;
+  } catch(e){}
+}
+
+async function loadSlow(){
+  try {
+    var r = await fetch('/admin/api/app-logs/slow?limit=10');
+    var d = await r.json();
+    var body = document.getElementById('slowBody');
+    if (d.code !== 0 || !d.data || !d.data.length){
+      body.innerHTML = '<tr><td colspan="5" class="loading-cell">暂无慢请求</td></tr>';
+      return;
+    }
+    body.innerHTML = d.data.map(function(x){
+      var ms = x.elapsed_ms;
+      var cls = ms > 10000 ? 'badge-cancelled' : (ms > 5000 ? 'badge-pending' : 'badge-paid');
+      return '<tr>' +
+        '<td><span class="badge ' + cls + '">' + Math.round(ms) + ' ms</span></td>' +
+        '<td class="mono">' + (x.method || '') + '</td>' +
+        '<td class="mono">' + (x.url || '') + '</td>' +
+        '<td class="small mono">' + (x.ip || '—') + '</td>' +
+        '<td class="small">' + (x.created_at || '') + '</td>' +
+      '</tr>';
+    }).join('');
+  } catch(e){}
+}
+
+async function loadAppLogs(page){
+  page = page || 1;
+  var level = document.getElementById('fLevel').value;
+  var box = document.getElementById('appLogList');
+  box.innerHTML = '<p class="muted" style="padding:30px;text-align:center;">加载中…</p>';
+
+  var url = '/admin/api/app-logs?page=' + page + '&page_size=20';
+  if (level) url += '&level=' + level;
+
+  try {
+    var r = await fetch(url);
+    var d = await r.json();
+    if (d.code !== 0) throw new Error();
+    var data = d.data;
+    if (!data.items.length){
+      box.innerHTML = '<p class="muted" style="padding:30px;text-align:center;">暂无日志</p>';
+      document.getElementById('appPager').innerHTML = '';
+      return;
+    }
+    box.innerHTML = data.items.map(function(x){
+      var lvlCls = x.level === 'ERROR' ? 'badge-cancelled'
+                 : x.level === 'CRITICAL' ? 'badge-cancelled'
+                 : 'badge-pending';
+      var tbHtml = x.traceback
+        ? '<details class="log-tb"><summary>查看堆栈</summary><pre>' + esc(x.traceback) + '</pre></details>'
+        : '';
+      var extra = '';
+      if (x.elapsed_ms) extra += ' · ' + Math.round(x.elapsed_ms) + 'ms';
+      if (x.method || x.url) extra += ' · ' + (x.method || '') + ' ' + (x.url || '');
+      return '<div class="app-log-card">' +
+        '<div class="al-head">' +
+          '<span class="badge ' + lvlCls + '">' + (x.level || '') + '</span>' +
+          '<span class="al-time">' + (x.created_at || '') + '</span>' +
+        '</div>' +
+        '<div class="al-msg">' + esc(x.message || '') + '</div>' +
+        (extra ? '<div class="al-extra">' + esc(extra) + '</div>' : '') +
+        tbHtml +
+      '</div>';
+    }).join('');
+    renderPager('appPager', data, 'loadAppLogs');
+  } catch(e){
+    box.innerHTML = '<p class="muted" style="padding:30px;text-align:center;">加载失败</p>';
+  }
+}
+
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+document.getElementById('btnRefresh').onclick = function(){ loadLogs(1); };
+document.getElementById('btnRefreshApp').onclick = function(){
+  loadAppStats(); loadSlow(); loadAppLogs(1);
+};
+document.getElementById('fLevel').onchange = function(){ loadAppLogs(1); };
+
 loadLogs(1);
 </script>
 {% endblock %}

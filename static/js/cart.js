@@ -119,47 +119,68 @@
     }, 1200);
   }
 
-  // 下单
+  // 下单（v3.8：走专用接口 /api/order/create，跳过 LLM）
   async function checkout(){
     const cart = load();
     if (cart.length === 0){ toast('购物车是空的'); return; }
 
     // ---------- 必须登录才能下单 ----------
     if (!window.Auth || !Auth.isLogin()) {
-      alert('下单需要先登录哦～\n\n登录后：\n· 每消费 1 元累积 1 积分\n· 可查看订单状态、随时取消\n· 积分可兑换糖蒜、冰峰等');
-      var modalEl = document.getElementById('cartModal');
-      if (modalEl) modalEl.classList.remove('show');
+      var modalEl0 = document.getElementById('cartModal');
+      if (modalEl0) modalEl0.classList.remove('show');
       location.href = '/profile?login=1';
       return;
     }
 
-    const text = '我要点：' + cart.map(it => `${it.name} ${it.qty} 份`).join('，');
-    const tableNo = (window.getCurrentTable && window.getCurrentTable()) || '外带';
+    // ---------- 防抖：按钮加 loading ----------
+    var checkoutBtn = document.getElementById('cartCheckout');
+    if (checkoutBtn && checkoutBtn.disabled) return;
+    var origText = '下单';
+    if (checkoutBtn){
+      origText = checkoutBtn.textContent || '下单';
+      checkoutBtn.disabled = true;
+      checkoutBtn.textContent = '下单中…';
+    }
 
-    const token = localStorage.getItem('tsx-token') || '';
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = 'Bearer ' + token;
+    var tableNo = (window.getCurrentTable && window.getCurrentTable()) || '外带';
+    var token = localStorage.getItem('tsx-token') || '';
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST', headers,
-        body: JSON.stringify({ message: text, table_no: tableNo })
-      }).then(r => r.json());
+      var res = await fetch('/api/order/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({
+          items: cart.map(function(it){ return { name: it.name, qty: it.qty }; }),
+          table_no: tableNo
+        })
+      }).then(function(r){ return r.json(); });
 
-      // 后端可能返回 res.data.order 或 res.data.reply
-      const order = res.data && res.data.order;
+      if (res.code === 401) {
+        if (window.Auth && Auth.logout) Auth.logout();
+        toast('登录已过期，请重新登录');
+        setTimeout(function(){ location.href = '/profile?login=1'; }, 800);
+        return;
+      }
+
+      var order = res.data && res.data.order;
       if (res.code === 0 && order){
-        // 关闭购物车弹窗
-        document.getElementById('cartModal').classList.remove('show');
-        // 展示订单成功弹窗
+        var m = document.getElementById('cartModal');
+        if (m) m.classList.remove('show');
         showOrderSuccess(order);
-        // 清空购物车
         clear();
       } else {
         toast(res.msg || '下单失败');
       }
     } catch(e){
       toast('网络错误');
+    } finally {
+      if (checkoutBtn){
+        checkoutBtn.disabled = false;
+        checkoutBtn.textContent = origText;
+      }
     }
   }
 

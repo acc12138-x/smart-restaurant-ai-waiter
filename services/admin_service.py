@@ -1,4 +1,4 @@
-﻿# services/admin_service.py
+# services/admin_service.py
 """后台管理员业务逻辑"""
 import time
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -9,6 +9,11 @@ from repositories.instances import (
     kb_history_repo, table_repo,
 )
 from utils.exceptions import BizError
+
+
+_login_fails = {}  # ip/username -> [失败时间戳]
+_LOGIN_MAX = 5       # 15 分钟内最多失败 5 次
+_LOGIN_WINDOW = 900  # 15 分钟
 
 
 class AdminService:
@@ -185,8 +190,11 @@ class AdminService:
 
     def get_messages(self, page=1, page_size=20, unread_only=False):
         msgs = message_repo.get_all()
-        msgs.sort(key=lambda x: x.get('created_at') or '',
-                  reverse=True)
+        # 排序：先按时间倒序，时间相同（或都为空）时按 id 倒序
+        msgs.sort(key=lambda x: (
+            x.get('created_at') or '',
+            x.get('id', 0)
+        ), reverse=True)
         if unread_only:
             msgs = [m for m in msgs if not m.get('read')]
         total = len(msgs)
@@ -198,6 +206,18 @@ class AdminService:
             'unread_count': sum(1 for m in message_repo.get_all()
                                 if not m.get('read')),
         }
+
+    def delete_message(self, msg_id, admin_id=None):
+        """删除留言"""
+        msg = message_repo.find_by_id(msg_id)
+        if not msg:
+            raise BizError('留言不存在', code=404)
+        message_repo.delete(msg_id)
+        if admin_id:
+            self.log_action(admin_id, 'delete_message',
+                            target=str(msg_id),
+                            detail=(msg.get('content') or '')[:50])
+        return msg
 
     def mark_message_read(self, msg_id, read=True, admin_id=None):
         result = message_repo.update(msg_id, {'read': 1 if read else 0})
@@ -348,6 +368,124 @@ class AdminService:
                 'scan_count': 1,
                 'created_at': time.strftime('%Y-%m-%d %H:%M:%S'),
             })
+
+
+    # ---------- v3.1 · 菜单管理 ----------
+
+    def get_menu(self):
+        from services.menu_service import menu_service
+        return menu_service.get_all()
+
+    def save_menu_item(self, category, item, old_name=None, admin_id=None):
+        from services.menu_service import menu_service
+        if old_name:
+            result = menu_service.update_item(category, old_name, item)
+            action = 'menu_item_update'
+        else:
+            result = menu_service.add_item(category, item)
+            action = 'menu_item_add'
+        if admin_id:
+            self.log_action(admin_id, action,
+                            target=f'{category}/{item.get("name")}')
+        return result
+
+    def delete_menu_item(self, category, name, admin_id=None):
+        from services.menu_service import menu_service
+        result = menu_service.delete_item(category, name)
+        if admin_id:
+            self.log_action(admin_id, 'menu_item_delete',
+                            target=f'{category}/{name}')
+        return result
+
+    def add_menu_category(self, name, admin_id=None):
+        from services.menu_service import menu_service
+        result = menu_service.add_category(name)
+        if admin_id:
+            self.log_action(admin_id, 'menu_cat_add', target=name)
+        return result
+
+    def delete_menu_category(self, name, admin_id=None):
+        from services.menu_service import menu_service
+        result = menu_service.delete_category(name)
+        if admin_id:
+            self.log_action(admin_id, 'menu_cat_delete', target=name)
+        return result
+
+
+    # ---------- v3.8 应用日志 ----------
+
+    def get_app_logs(self, level=None, page=1, page_size=30):
+        from repositories.sqlite_repo import get_conn
+        conn = get_conn()
+        try:
+            where = 'WHERE 1=1'
+            params = []
+            if level:
+                where += ' AND level = ?'
+                params.append(level)
+            cur = conn.execute('SELECT COUNT(*) as c FROM app_logs ' + where, params)
+            total = cur.fetchone()['c']
+            start = (page - 1) * page_size
+            cur = conn.execute(
+                'SELECT * FROM app_logs ' + where + ' ORDER BY id DESC LIMIT ? OFFSET ?',
+                params + [page_size, start]
+            )
+            items = [dict(r) for r in cur.fetchall()]
+            return {
+                'total': total, 'page': page, 'page_size': page_size,
+                'pages': max(1, (total + page_size - 1) // page_size),
+                'items': items,
+            }
+        finally:
+            conn.close()
+
+    def get_slow_requests(self, limit=10):
+        from repositories.sqlite_repo import get_conn
+        conn = get_conn()
+        try:
+            cur = conn.execute(
+                'SELECT id, method, url, elapsed_ms, ip, uid, created_at '
+                'FROM app_logs WHERE elapsed_ms IS NOT NULL '
+                'ORDER BY elapsed_ms DESC LIMIT ?', (limit,))
+            return [dict(r) for r in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def get_app_log_stats(self):
+        from repositories.sqlite_repo import get_conn
+        conn = get_conn()
+        try:
+            cur = conn.execute(
+                'SELECT level, COUNT(*) as c FROM app_logs GROUP BY level')
+            by_level = {r['level']: r['c'] for r in cur.fetchall()}
+            cur = conn.execute(
+                'SELECT COUNT(*) as c FROM app_logs WHERE elapsed_ms IS NOT NULL')
+            slow_count = cur.fetchone()['c']
+            cur = conn.execute('SELECT COUNT(*) as c FROM app_logs')
+            total = cur.fetchone()['c']
+            return {'total': total, 'by_level': by_level, 'slow_count': slow_count}
+        finally:
+            conn.close()
+
+    def check_login_limit(self, key):
+        """返回 True 表示允许登录"""
+        import time as _t
+        now = _t.time()
+        fails = [t for t in _login_fails.get(key, []) if now - t < _LOGIN_WINDOW]
+        _login_fails[key] = fails
+        return len(fails) < _LOGIN_MAX
+
+    def record_login_fail(self, key):
+        import time as _t
+        _login_fails.setdefault(key, []).append(_t.time())
+
+    def clear_login_fails(self, key):
+        _login_fails.pop(key, None)
+
+    def get_login_fail_count(self, key):
+        import time as _t
+        now = _t.time()
+        return len([t for t in _login_fails.get(key, []) if now - t < _LOGIN_WINDOW])
 
 
 admin_service = AdminService()
