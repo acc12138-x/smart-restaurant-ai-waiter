@@ -31,9 +31,12 @@ class JsonRepository(BaseRepository):
         # 确保目录存在
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
-        # 确保文件存在
+        # 确保文件存在（多 worker 场景下可能竞争）
         if not os.path.exists(filepath):
-            self._write([])
+            try:
+                self._write([])
+            except (FileNotFoundError, OSError):
+                pass
 
     def _lock(self):
         return self._locks[self.filepath]
@@ -50,12 +53,17 @@ class JsonRepository(BaseRepository):
                     return []
 
     def _write(self, data):
-        """写文件（先写临时文件再替换，防止写一半崩溃）"""
+        """写文件（先写临时文件再替换，防止写一半崩溃）
+        多进程竞争时忽略 FileNotFoundError
+        """
         with self._lock():
             tmp = self.filepath + '.tmp'
-            with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            os.replace(tmp, self.filepath)
+            try:
+                with open(tmp, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                os.replace(tmp, self.filepath)
+            except FileNotFoundError:
+                pass
 
     def _next_id(self, items):
         """生成下一个 ID"""
