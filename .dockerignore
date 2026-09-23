@@ -1,14 +1,15 @@
 venv312/
+_testenv/
 __pycache__/
 *.pyc
+*.pyo
 .pytest_cache/
 .git/
 .gitignore
 logs/
 vector_store/
 *.pptx
+*.docx
 *.mp4
-同盛祥*.pptx
-羊肉泡馍.mp4
 optimize_frames.py
 crop_frames.py
