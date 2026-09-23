@@ -1,17 +1,41 @@
+# Web framework
+Flask==3.1.3
+Flask-Compress==1.24
+gunicorn==26.2.0
+waitress==3.0.2
+Werkzeug==3.1.8
+Jinja2==3.1.6
 
+# LangChain
+langchain==1.4.0
+langchain-core==1.6.3
+langchain-community==0.4.2
+langchain-text-splitters==1.1.2
+langchain-ollama==1.1.0
+langchain-chroma==1.1.0
 
-# Excel 导出
-openpyxl>=3.1.0
+# Vector DB
+chromadb==1.5.9
 
-# 补全（v3.9）
-openai
-qrcode
-Pillow
+# Remote LLM
+openai==3.16.2
 
-# Flask 关键依赖（v3.9 修复 CI）
-werkzeug>=3.0.0
-jinja2>=3.1.0
-itsdangerous>=2.1.0
-click>=8.1.0
-markupsafe>=2.1.0
-blinker>=1.6.0
+# PDF
+pypdf==6.18.1
+
+# HTTP
+requests==2.34.2
+
+# Auth
+PyJWT==2.14.0
+
+# Excel
+openpyxl==3.1.5
+
+# QR code
+qrcode==8.2
+pillow==12.3.0
+
+# Test
+pytest==9.1.1
+pytest-flask==1.3.0
