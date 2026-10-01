@@ -312,10 +312,9 @@ class ChatService:
 
     def _handle_recommend(self, message, uid=None):
         """推荐走 LLM：给菜单 + 用户消息 + 历史，让 AI 灵活挑菜（v3.9）"""
-        import requests as _req
         import json as _json
         from services.menu_service import menu_service
-        from services.llm_parser import _get_config, _get_ollama_host
+        from services.llm_parser import _get_config
         from configs.config import get_config as _get_cfg
 
         cfg_llm = _get_config()
@@ -364,26 +363,14 @@ class ChatService:
             "【回复】"
         )
 
-        # ---------- 调 LLM ----------
-        host = _get_ollama_host()
-        url = host + '/api/chat'
-        payload = {
-            'model': cfg_llm.get('ollama_model') or cfg_app.CHAT_MODEL,
-            'messages': [{'role': 'user', 'content': prompt}],
-            'stream': False,
-            'think': False,
-            'options': {'temperature': 0.75, 'num_predict': 220},
-        }
-
+        # ---------- 调 LLM（走通用接口：优先远程 API，失败降级本地） ----------
+        from utils.remote_llm import chat as _llm_chat
         try:
-            r = _req.post(url, json=payload, timeout=20)
-            r.raise_for_status()
-            content = (r.json().get('message', {}) or {}).get('content', '').strip()
+            content = _llm_chat(prompt, temperature=0.75, max_tokens=220, timeout=25)
             if content:
                 cleaned = self._clean(content)
                 if cleaned:
                     logger.info('[Recommend-LLM] ' + message[:30] + ' -> ' + cleaned[:60])
-                    # 记录本次推过的菜
                     try:
                         if uid:
                             dishes = self._extract_dishes_from_text(cleaned)

@@ -364,29 +364,15 @@ def chat_with_ollama_native(question: str, context: str, history: str = ''):
         "【回答】"
     )
 
-    url = f"{OLLAMA_HOST}/api/chat"
-    payload = {
-        "model": CHAT_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
-        "stream": True,
-        "think": False,
-        "options": {
-            "temperature": 0.3,
-            "num_predict": 120,
-        }
-    }
-
+    # 走通用接口：优先远程 API，失败降级本地 Ollama
+    from utils.remote_llm import chat_stream as _llm_stream
     try:
-        with requests.post(url, json=payload, stream=True, timeout=120) as r:
-            for line in r.iter_lines():
-                if not line:
-                    continue
-                try:
-                    data = _json.loads(line)
-                except Exception:
-                    continue
-                content = data.get("message", {}).get("content", "")
-                if content:
-                    yield content
+        got_any = False
+        for chunk in _llm_stream(prompt, temperature=0.3, max_tokens=200, timeout=60):
+            if chunk:
+                got_any = True
+                yield chunk
+        if not got_any:
+            yield "抱歉，暂时无法回复，请稍后再试。"
     except Exception as e:
         yield f"出错了：{e}"
