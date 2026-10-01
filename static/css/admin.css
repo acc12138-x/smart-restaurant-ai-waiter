@@ -1445,3 +1445,60 @@ Write-Host "CSS 追加完成" -ForegroundColor Green
   color: #fff !important;
   border-color: #DC2626 !important;
 }
+
+
+/* ============================================
+   v3.9 · 系统设置页宽度优化
+   ============================================ */
+
+/* 覆盖之前的 max-width: 800px，改成铺满 */
+.settings-form{
+  width: 100% !important;
+  max-width: 1400px !important;
+  margin: 0 auto !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 20px !important;
+  align-items: start !important;
+}
+
+.settings-form > .settings-group{
+  margin-bottom: 0 !important;
+}
+
+/* 保存栏横跨两列 */
+.settings-form > .settings-save-bar{
+  grid-column: 1 / -1 !important;
+}
+
+/* 每组的行更宽松 */
+.settings-group{
+  padding: 26px 30px !important;
+}
+.settings-row{
+  grid-template-columns: 150px 1fr !important;
+  gap: 22px !important;
+  padding: 14px 0 !important;
+}
+
+/* 中屏：单列 */
+@media (max-width: 1200px){
+  .settings-form{
+    grid-template-columns: 1fr !important;
+    max-width: 900px !important;
+  }
+  .settings-form > .settings-group{
+    margin-bottom: 20px !important;
+  }
+}
+
+/* 手机 */
+@media (max-width: 640px){
+  .settings-form{
+    max-width: 100% !important;
+  }
+  .settings-row{
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+}
