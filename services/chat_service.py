@@ -6,6 +6,21 @@ from services.session_service import session_service
 from utils.logger import logger
 import time as _time
 
+
+# 不参与"未知菜名"拦截的意图。
+#
+# 这些意图要么在别处已经处理完（cancel / modify / leave_message …），要么本来
+# 就该走知识库兜底（other）。历史上 'other' 不在名单里，导致"你们家的羊从哪来"
+# 这类剥离疑问词后只剩 2-8 个汉字的问句被当成菜名拦掉，回复"菜单里没有…"，
+# 永远到不了知识库 —— 知识库明写了「选用宁夏滩羊」却答不出来。
+# 真正需要防幻觉的是 place_order / query_menu，那两个意图仍然参与拦截。
+SKIP_UNKNOWN_DISH_INTENTS = (
+    'cancel_order', 'cancel_all', 'modify_order', 'chat', 'recommend',
+    'query_total', 'leave_message', 'accept_recommend', 'reject_recommend',
+    'other',
+)
+
+
 class ChatService:
     """AI 对话业务逻辑"""
 
@@ -910,9 +925,8 @@ class ChatService:
             return {'reply': reply, 'intent': 'leave_message', 'order': None}
 
         # ============ 未知菜名检测（防幻觉，所有意图）============
-        if intent not in ('cancel_order', 'cancel_all', 'modify_order', 'chat',
-                          'recommend', 'query_total', 'leave_message',
-                          'accept_recommend', 'reject_recommend'):
+        # 'other' 走知识库兜底，不参与"未知菜名"拦截（见 SKIP_UNKNOWN_DISH_INTENTS）
+        if intent not in SKIP_UNKNOWN_DISH_INTENTS:
             unknown = self._detect_unknown_dish(message)
             if unknown:
                 reply = f'菜单里没有「{unknown}」哦～ 我们的招牌是牛肉泡馍、羊肉泡馍、优质羊肉泡馍，还有凉皮、糖蒜、冰峰汽水。想吃哪种？'
@@ -1265,9 +1279,8 @@ class ChatService:
             return
 
         # ============ 未知菜名检测（防幻觉，所有意图）============
-        if intent not in ('cancel_order', 'cancel_all', 'modify_order', 'chat',
-                          'recommend', 'query_total', 'leave_message',
-                          'accept_recommend', 'reject_recommend'):
+        # 'other' 走知识库兜底，不参与"未知菜名"拦截（见 SKIP_UNKNOWN_DISH_INTENTS）
+        if intent not in SKIP_UNKNOWN_DISH_INTENTS:
             unknown = self._detect_unknown_dish(message)
             if unknown:
                 reply = f'菜单里没有「{unknown}」哦～ 我们的招牌是牛肉泡馍、羊肉泡馍、优质羊肉泡馍，还有凉皮、糖蒜、冰峰汽水。想吃哪种？'
