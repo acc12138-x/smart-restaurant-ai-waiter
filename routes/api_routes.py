@@ -9,6 +9,7 @@ from services.rag_service import chat_plain, rebuild_knowledge_base
 from utils.response import success, error
 from utils.exceptions import BizError
 from utils.auth import login_required
+from utils.admin_auth import admin_login_required
 from services.session_service import session_service
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -108,8 +109,18 @@ def api_chat_plain():
 
 
 @api_bp.route('/kb_rebuild', methods=['POST'])
+@admin_login_required
 def api_kb_rebuild():
-    rebuild_knowledge_base()
+    """手动重建向量库（仅管理员）
+
+    注意：这个接口原先没有任何鉴权，任何人都能远程触发一次
+    "清空向量库 + 重新向量化"，既是 RAG 的 DoS 入口，也会白白消耗
+    embedding 额度。
+    """
+    try:
+        rebuild_knowledge_base()
+    except Exception as e:
+        return error(500, f'重建失败: {e}')
     return success(msg='知识库已重建')
 
 

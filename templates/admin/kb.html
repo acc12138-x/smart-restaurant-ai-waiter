@@ -69,9 +69,9 @@
 {% endblock %}
 {% block script %}
 <script>
-var KB_TOKEN = 'admin-token-dev';
+// 鉴权改用管理员登录 Cookie（同源 fetch 会自动携带），不再用硬编码 token
 function kbHeaders() {
-  return { 'X-Admin-Token': KB_TOKEN, 'Content-Type': 'application/json' };
+  return { 'Content-Type': 'application/json' };
 }
 var currentEditingFile = null;
 

@@ -1,38 +1,37 @@
 # routes/admin_routes.py
-"""知识库热更新 + RAG 评估 API"""
+"""知识库热更新 + RAG 评估 API
+
+鉴权：统一使用管理员 Cookie JWT（utils.admin_auth.admin_login_required）。
+历史上这里用的是硬编码的 X-Admin-Token —— 默认值 `admin-token-dev` 就明文写在
+templates/admin/kb.html 里，只要服务器没设 ADMIN_TOKEN 环境变量，任何人都能
+读写甚至删除 knowledge_docs/ 下的全部文件。
+"""
 import os
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request
+
 from services.rag_eval_service import rag_eval_service
 from services import rag_service
 from utils.response import success, error
+from utils.admin_auth import admin_login_required
 from configs.config import get_config
 
 _cfg = get_config()
 admin_bp = Blueprint('admin', __name__, url_prefix='/api/admin')
 
 KB_DIR = _cfg.DOCS_DIR
-ADMIN_TOKEN = os.environ.get('ADMIN_TOKEN', 'admin-token-dev')
-
-
-def _check_admin():
-    """简单鉴权：Header X-Admin-Token"""
-    token = request.headers.get('X-Admin-Token', '')
-    return token == ADMIN_TOKEN
 
 
 @admin_bp.route('/rag_stats', methods=['GET'])
+@admin_login_required
 def rag_stats():
     """RAG 评估数据"""
-    if not _check_admin():
-        return error(401, '未授权')
     return success(data=rag_eval_service.get_stats())
 
 
 @admin_bp.route('/kb_files', methods=['GET'])
+@admin_login_required
 def kb_files():
     """列出知识库文件"""
-    if not _check_admin():
-        return error(401, '未授权')
     files = []
     if os.path.exists(KB_DIR):
         for f in os.listdir(KB_DIR):
@@ -47,10 +46,9 @@ def kb_files():
 
 
 @admin_bp.route('/kb_file', methods=['GET'])
+@admin_login_required
 def kb_file_read():
     """读知识库文件"""
-    if not _check_admin():
-        return error(401, '未授权')
     name = request.args.get('name', '')
     if not name:
         return error(400, '参数错误')
@@ -65,10 +63,9 @@ def kb_file_read():
 
 
 @admin_bp.route('/kb_file', methods=['POST'])
+@admin_login_required
 def kb_file_save():
     """保存知识库文件并重建向量库"""
-    if not _check_admin():
-        return error(401, '未授权')
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     content = data.get('content') or ''
@@ -100,10 +97,9 @@ def kb_file_save():
 
 
 @admin_bp.route('/kb_file', methods=['DELETE'])
+@admin_login_required
 def kb_file_delete():
     """删除知识库文件并重建"""
-    if not _check_admin():
-        return error(401, '未授权')
     name = request.args.get('name', '')
     if not name:
         return error(400, '参数错误')
@@ -114,6 +110,6 @@ def kb_file_delete():
         os.remove(path)
         try:
             rag_service.rebuild_knowledge_base()
-        except Exception:
-            pass
+        except Exception as e:
+            return error(500, f'已删除但重建失败: {e}')
     return success(msg='已删除')
