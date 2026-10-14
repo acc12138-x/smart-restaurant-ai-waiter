@@ -3,7 +3,7 @@ services:
     build: .
     container_name: tsx-app
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     volumes:
       - ./data:/app/data
       - ./vector_store:/app/vector_store
@@ -20,7 +20,10 @@ services:
       - ./static:/app/static
       - ./scripts:/app/scripts
     environment:
-     - OLLAMA_HOST=http://192.168.0.108:11434
+     - OLLAMA_HOST=http://127.0.0.1:11434
+     - SKIP_WARMUP=1
+     - WARMUP_EMBED=0
+     - FLASK_ENV=production
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
