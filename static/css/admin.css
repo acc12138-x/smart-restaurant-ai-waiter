@@ -1523,6 +1523,34 @@ Write-Host "CSS 追加完成" -ForegroundColor Green
   #weeklyReport .chart-head{ margin-bottom: 14px; }
 }
 
+/* ---------- KPI 卡：文字一律不折行 ---------- */
+/* 原来 .kpi-value 用了 word-break:break-all，¥76.0 会被断成「¥7 / 6.0」两行 */
+.kpi-value{
+  white-space: nowrap;
+  word-break: normal;
+  overflow: hidden;
+  line-height: 1.08;
+  font-size: 26px;
+}
+.kpi-label{
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 密集网格（经营数据 7 列 / 流量数据 6 列 / 周报 6 列）用紧凑尺寸：
+   图标、内边距、字号各收一档，保证标签和数字都在一行内放得下 */
+.kpi-grid-6 .kpi-card,
+.kpi-grid-7 .kpi-card{ padding: 14px; gap: 10px; }
+.kpi-grid-6 .kpi-card .kpi-icon,
+.kpi-grid-7 .kpi-card .kpi-icon{
+  width: 34px; height: 34px; font-size: 16px; border-radius: 10px;
+}
+.kpi-grid-6 .kpi-card .kpi-label,
+.kpi-grid-7 .kpi-card .kpi-label{ font-size: 11.5px; margin-bottom: 4px; }
+.kpi-grid-6 .kpi-card .kpi-value,
+.kpi-grid-7 .kpi-card .kpi-value{ font-size: 19px; }
+
 /* ============================================
    周报 · 金牌分析师（AI 点评）
    ============================================ */

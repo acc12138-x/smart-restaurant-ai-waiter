@@ -11,7 +11,7 @@
       <div class="kpi-icon">💰</div>
       <div class="kpi-body">
         <div class="kpi-label">今日营业额</div>
-        <div class="kpi-value">¥{{ stats.revenue_today }}</div>
+        <div class="kpi-value">¥{{ ('%.2f'|format(stats.revenue_today)).rstrip('0').rstrip('.') }}</div>
       </div>
     </div>
     <div class="kpi-card kpi-blue">
@@ -25,7 +25,7 @@
       <div class="kpi-icon">📈</div>
       <div class="kpi-body">
         <div class="kpi-label">累计营业额</div>
-        <div class="kpi-value">¥{{ stats.revenue_total }}</div>
+        <div class="kpi-value">¥{{ ('%.2f'|format(stats.revenue_total)).rstrip('0').rstrip('.') }}</div>
       </div>
     </div>
     <div class="kpi-card kpi-purple">
