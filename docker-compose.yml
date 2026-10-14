@@ -24,6 +24,9 @@ services:
      - SKIP_WARMUP=1
      - WARMUP_EMBED=0
      - FLASK_ENV=production
+     # 业务时间按北京时间。POSIX 时区串 CST-8 = UTC+8，不需要镜像里装 tzdata。
+     # 容器默认是 UTC，不设这行会让订单时间早 8 小时、凌晨的单子算到前一天。
+     - TZ=CST-8
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

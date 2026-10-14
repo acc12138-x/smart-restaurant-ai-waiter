@@ -8,6 +8,13 @@ from utils.response import error
 from utils.exceptions import BizError
 from routes import (page_bp, api_bp, auth_bp, points_bp, track_bp, docs_bp, admin_bp, admin_page_bp)
 
+# 业务时间统一按北京时间。
+# 容器默认跑在 UTC，而订单 created_at、日志时间、统计口径全都取自"进程本地时间"，
+# 不修正的话订单时间会早 8 小时，凌晨的单子（本店营业到次日 02:00）还会被算到前一天。
+from utils.timeutil import enforce_process_tz
+
+enforce_process_tz()
+
 # ============================================
 # 创建 app
 # ============================================
