@@ -366,7 +366,7 @@ class ChatService:
         # ---------- 调 LLM（走通用接口：优先远程 API，失败降级本地） ----------
         from utils.remote_llm import chat as _llm_chat
         try:
-            content = _llm_chat(prompt, temperature=0.75, max_tokens=220, timeout=25)
+            content = _llm_chat(prompt, temperature=0.75, max_tokens=220, timeout=8)
             if content:
                 cleaned = self._clean(content)
                 if cleaned:

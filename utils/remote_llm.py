@@ -5,7 +5,7 @@
 from utils.logger import logger
 
 
-def chat(prompt, temperature=0.4, max_tokens=400, timeout=30):
+def chat(prompt, temperature=0.4, max_tokens=400, timeout=8):
     """一次性调用（非流式），返回文本或 None"""
     try:
         from services.settings_service import settings_service
@@ -21,7 +21,7 @@ def chat(prompt, temperature=0.4, max_tokens=400, timeout=30):
     return _call_ollama(prompt, temperature, max_tokens, timeout)
 
 
-def chat_stream(prompt, temperature=0.4, max_tokens=400, timeout=120):
+def chat_stream(prompt, temperature=0.4, max_tokens=400, timeout=15):
     """流式调用，yield 文本块"""
     try:
         from services.settings_service import settings_service

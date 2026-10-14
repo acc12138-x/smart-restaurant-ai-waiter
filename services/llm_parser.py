@@ -15,7 +15,7 @@ from utils.logger import logger
 
 _cfg = get_config()
 
-TIMEOUT = float(os.environ.get('LLM_PARSER_TIMEOUT', '20.0'))
+TIMEOUT = float(os.environ.get('LLM_PARSER_TIMEOUT', '8.0'))
 QWEN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 
 _MENU_NAMES = None
@@ -303,10 +303,13 @@ def parse(message, history=''):
         result = _try_remote_api(prompt, message, menu_names, cfg)
         if result:
             return result
-        # Qwen 失败 → 降级本地 Ollama
+        # 云端无 Ollama，跳过本地降级直接走规则
+        if os.environ.get('SKIP_OLLAMA_FALLBACK', '0') == '1':
+            logger.info('[LLM] Qwen 失败，跳过 Ollama 降级')
+            return None
         logger.info('[LLM] Qwen 失败，降级到本地 Ollama')
 
-    # 2) 本地 Ollama（默认路径 / Qwen 失败后）
+    # 2) 本地 Ollama
     result = _try_ollama(prompt, message, menu_names, cfg)
     if result:
         return result
