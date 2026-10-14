@@ -276,7 +276,7 @@
       maskedApiKey = cfg.api_key_masked || '';
       if (maskedApiKey){
         apiKey.placeholder = '当前已设置：' + maskedApiKey + '（留空不改）';
-        apiKeyHint.textContent = '想换 Key 就填新的，不改就留空';
+        apiKeyHint.textContent = '想换 Key 就填新的；不改就留空，测试时会用已保存的 Key';
       } else {
         apiKey.placeholder = 'sk-xxxxx';
         apiKeyHint.textContent = '从对应服务商控制台获取';
@@ -394,8 +394,9 @@
     var base_url = document.getElementById('apiBaseUrl').value.trim();
     var key = document.getElementById('apiKey').value.trim();
     var model = document.getElementById('apiModel').value.trim();
-    if (!base_url || !key || !model){
-      alert('base_url / key / model 都要填');
+    // key 允许留空：后端会回落到已保存的 Key（页面出于安全不回显它）
+    if (!base_url || !model){
+      alert('base_url 和 模型名 都要填');
       return;
     }
     var btn = this, orig = btn.textContent;

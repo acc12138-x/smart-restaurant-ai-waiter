@@ -852,7 +852,9 @@ def settings_page():
 @admin_login_required
 def api_settings_get():
     from services.settings_service import settings_service
-    return jsonify(code=0, data=settings_service.get_all(mask_sensitive=True))
+    # fresh=True 强制从库里重读：多 worker 下缓存可能还没加载或已过期，
+    # 否则设置页会显示成默认值（曾导致整块 API 配置"消失"）
+    return jsonify(code=0, data=settings_service.get_all(mask_sensitive=True, fresh=True))
 
 
 @admin_page_bp.route('/api/settings', methods=['POST'])
@@ -923,8 +925,24 @@ def api_test_remote_api():
     base_url = (data.get('base_url') or '').strip()
     api_key  = (data.get('key') or '').strip()
     model    = (data.get('model') or '').strip()
-    if not base_url or not api_key or not model:
-        return jsonify(code=1, msg='base_url / key / model 都要填'), 400
+
+    # 留空的字段回落到已保存的配置。
+    # 前端出于安全不回显 Key（只放进 placeholder），所以"保存过 Key 之后就再也
+    # 测不了"是个 bug —— 这里补上兜底。
+    from services.settings_service import settings_service
+    key_from_store = False
+    if not base_url:
+        base_url = (settings_service.get('api_base_url') or '').strip()
+    if not api_key:
+        api_key = (settings_service.get('api_key') or '').strip()
+        key_from_store = bool(api_key)
+    if not model:
+        model = (settings_service.get('api_model') or '').strip()
+
+    if not base_url or not model:
+        return jsonify(code=1, msg='base_url 和 模型名 不能为空'), 400
+    if not api_key:
+        return jsonify(code=1, msg='还没配置 API Key，请先填写并保存'), 400
     if not base_url.startswith(('http://', 'https://')):
         return jsonify(code=1, msg='base_url 要以 http:// 或 https:// 开头'), 400
     try:
@@ -935,6 +953,7 @@ def api_test_remote_api():
             messages=[{'role': 'user', 'content': 'ping'}],
             max_tokens=5,
         )
-        return jsonify(code=0, msg='连接成功，模型响应正常')
+        src = '已保存的 Key' if key_from_store else '本次填写的 Key'
+        return jsonify(code=0, msg='连接成功（%s，模型 %s）' % (src, model))
     except Exception as e:
         return jsonify(code=1, msg='连接失败: ' + str(e)[:200])

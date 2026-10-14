@@ -51,6 +51,11 @@ DEFAULTS = {
 
 SENSITIVE_KEYS = {'api_key', 'wecom_webhook'}
 
+# 设置缓存的存活时间（秒）。
+# 生产用 gunicorn 多 worker，每个 worker 各有一份进程内缓存；
+# 靠这个 TTL，某个 worker 里保存的改动能自动传播到其它 worker。
+CACHE_TTL = 5.0
+
 
 def _mask(value):
     if not value:
@@ -64,6 +69,7 @@ class SettingsService:
     def __init__(self):
         self._cache = {}
         self._cache_loaded = False
+        self._loaded_at = 0.0
         self._lock = threading.Lock()
         self._ensure_table()
 
@@ -86,17 +92,27 @@ class SettingsService:
                 cur = conn.execute('SELECT key, value FROM settings')
                 self._cache = {r['key']: (r['value'] or '') for r in cur.fetchall()}
                 self._cache_loaded = True
+                self._loaded_at = time.time()
             finally:
                 conn.close()
         except Exception as e:
+            # 保留上一次的缓存，避免一次瞬时故障把全部配置清空成默认值
             logger.warning('[Settings] 加载失败: ' + str(e))
-            self._cache = {}
+
+    def _ensure_loaded(self, force=False):
+        """确保缓存可用。
+
+        - force=True：强制重读（后台设置页用，保证管理员看到的一定是库里的真值）
+        - 否则缓存超过 CACHE_TTL 就重读，让多 worker 之间的改动几秒内可见
+        """
+        if not force and self._cache_loaded and (time.time() - self._loaded_at) < CACHE_TTL:
+            return
+        with self._lock:
+            if force or not self._cache_loaded or (time.time() - self._loaded_at) >= CACHE_TTL:
+                self._load_all()
 
     def get(self, key, default=None):
-        if not self._cache_loaded:
-            with self._lock:
-                if not self._cache_loaded:
-                    self._load_all()
+        self._ensure_loaded()
         if key in self._cache and self._cache[key] != '':
             return self._cache[key]
         if default is not None:
@@ -115,7 +131,13 @@ class SettingsService:
             return v
         return str(v).lower() in ('true', '1', 'yes', 'on')
 
-    def get_all(self, mask_sensitive=True):
+    def get_all(self, mask_sensitive=True, fresh=False):
+        """读出全部配置（含默认值兜底）。
+
+        fresh=True 时强制从库里重读，后台设置页应当这样调用——否则新起的
+        worker 因为缓存还没加载，会把整页配置显示成默认值。
+        """
+        self._ensure_loaded(force=fresh)
         result = dict(DEFAULTS)
         for k, v in self._cache.items():
             result[k] = v
@@ -135,6 +157,7 @@ class SettingsService:
         finally:
             conn.close()
         self._cache[key] = str(value)
+        self._loaded_at = time.time()
         return True
 
     def set_many(self, data):
@@ -147,11 +170,13 @@ class SettingsService:
             conn.commit()
         finally:
             conn.close()
+        self._loaded_at = time.time()
         return len(data)
 
     def invalidate_cache(self):
         with self._lock:
             self._cache_loaded = False
+            self._loaded_at = 0.0
             self._cache = {}
 
 
