@@ -18,6 +18,11 @@
 import os
 import sys
 
+# 以 `python scripts/fix_timezone_offset.py` 直接运行时，sys.path 里是 scripts/ 而不是
+# 项目根，必须先补上，否则 import repositories 会失败（与 init_admin.py 一致的处理）
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
 import repositories.sqlite_repo as sqlite_repo
 
 MARKER_KEY = 'tz_backfill_v1'
@@ -62,6 +67,14 @@ def _marker_done(conn):
 def main():
     apply = '--apply' in sys.argv
     db_path = sqlite_repo.DB_PATH
+    # 可选：--db <路径> 指定数据库文件（默认与线上一致）
+    if '--db' in sys.argv:
+        try:
+            db_path = sys.argv[sys.argv.index('--db') + 1]
+        except IndexError:
+            print('[X] --db 后面要跟数据库路径')
+            return 1
+        sqlite_repo.DB_PATH = db_path
 
     if not os.path.exists(db_path):
         print(f'[X] 数据库不存在: {db_path}')

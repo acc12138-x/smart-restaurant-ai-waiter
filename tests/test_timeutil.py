@@ -119,3 +119,27 @@ def test_apply_is_idempotent(utc_db, monkeypatch):
     finally:
         conn.close()
     assert marker is not None
+
+
+def test_cli_runs_as_direct_script(utc_db):
+    """必须能以 `python scripts/fix_timezone_offset.py` 直接运行。
+
+    直接运行时 sys.path 里是 scripts/ 而不是项目根 —— 线上第一次运行就是栽在这里：
+    ModuleNotFoundError: No module named 'repositories'。
+    上面的用例都是 import 模块（conftest 已把项目根加进 sys.path），覆盖不到这条路径。
+    """
+    import subprocess
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script = os.path.join(root, 'scripts', 'fix_timezone_offset.py')
+    env = dict(os.environ)
+    env.pop('PYTHONPATH', None)          # 模拟线上：没有任何路径补偿
+    env['PYTHONIOENCODING'] = 'utf-8'    # 否则 Windows 下按 GBK 解码子进程输出会炸
+
+    r = subprocess.run(
+        [sys.executable, script, '--db', utc_db],
+        capture_output=True, encoding='utf-8', errors='replace', cwd=root, env=env,
+    )
+    assert r.returncode == 0, 'stdout:\n%s\nstderr:\n%s' % (r.stdout, r.stderr)
+    assert 'DRY-RUN' in r.stdout
+    assert 'ModuleNotFoundError' not in (r.stderr or '')
