@@ -127,8 +127,10 @@ class AdminService:
             m['chats'] = len(in_window(chat_log_repo.get_all(), start, end))
 
         def pct(cur, prev):
+            # 上周为 0 时不给百分比 —— 算出来只会是误导性的 +100%，
+            # 交给前端显示"新增"更诚实
             if not prev:
-                return None if not cur else 100.0
+                return None
             return round((cur - prev) / prev * 100, 1)
 
         delta = {k: pct(this_m[k], last_m[k])

@@ -94,6 +94,21 @@ def test_weekly_report_empty_week(rdb):
     assert '本周还没有订单' in r['insights'][0]
 
 
+def test_delta_is_none_without_baseline(rdb):
+    """上周为 0 时不给环比百分比 —— 否则会显示成误导性的 +100%"""
+    from services.admin_service import admin_service
+
+    mon = _monday_19h()
+    ts = (mon + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+    _order(rdb, 'A', 'u1', 30.0, ts, [{'name': '牛肉泡馍(小份)', 'qty': 1, 'subtotal': 30.0}])
+
+    r = admin_service.weekly_report()
+    assert r['this_week']['orders'] == 1
+    assert r['last_week']['orders'] == 0
+    assert r['delta']['orders'] is None       # 而不是 100.0
+    assert r['delta']['revenue'] is None
+
+
 def test_cancelled_orders_are_excluded(rdb):
     from services.admin_service import admin_service
     mon = _monday_19h()
