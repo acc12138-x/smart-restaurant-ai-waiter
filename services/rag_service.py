@@ -393,6 +393,10 @@ def _clear_vector_dir():
     if not os.path.exists(VECTOR_DIR):
         return
     for item in os.listdir(VECTOR_DIR):
+        if item == '.gitkeep':
+            # 保留占位文件：否则每次重建都会把它删掉，仓库一直处于"被修改"状态，
+            # 后续 git pull 更容易撞上冲突
+            continue
         path = os.path.join(VECTOR_DIR, item)
         try:
             if os.path.isdir(path):
