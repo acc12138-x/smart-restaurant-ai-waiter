@@ -7,18 +7,14 @@ from utils.logger import logger
 import time as _time
 
 
-# 不参与"未知菜名"拦截的意图。
+# 需要做"未知菜名"拦截的意图（白名单）。
 #
-# 这些意图要么在别处已经处理完（cancel / modify / leave_message …），要么本来
-# 就该走知识库兜底（other）。历史上 'other' 不在名单里，导致"你们家的羊从哪来"
-# 这类剥离疑问词后只剩 2-8 个汉字的问句被当成菜名拦掉，回复"菜单里没有…"，
-# 永远到不了知识库 —— 知识库明写了「选用宁夏滩羊」却答不出来。
-# 真正需要防幻觉的是 place_order / query_menu，那两个意图仍然参与拦截。
-SKIP_UNKNOWN_DISH_INTENTS = (
-    'cancel_order', 'cancel_all', 'modify_order', 'chat', 'recommend',
-    'query_total', 'leave_message', 'accept_recommend', 'reject_recommend',
-    'other',
-)
+# 只有点单和询价这两种意图，才可能出现"用户说了一个菜单里没有的菜"。
+# 这里用白名单而非黑名单，是因为意图来自大模型、天然会误判：实测
+# 「你们家的羊从哪来」被判成 query_hours，用黑名单就漏掉了它，于是回一句
+# 「菜单里没有「你们家羊从哪」哦～」—— 而知识库里明明写着「选用宁夏滩羊」。
+# 白名单能保证：任何误判都不会把资料型问题拦成"未知菜名"。
+UNKNOWN_DISH_INTENTS = ('place_order', 'query_menu')
 
 
 class ChatService:
@@ -118,6 +114,12 @@ class ChatService:
             return None
         # 必须全是中文
         if not re.match(r'^[\u4e00-\u9fff]+$', m):
+            return None
+
+        # 带人称/指示代词或疑问词的一定不是菜名。
+        # 这类问句常被剥成"你们家羊从哪""你们用什么羊肉"，会被误判成未知菜名，
+        # 回一句"菜单里没有「…」哦～"，永远到不了知识库。
+        if re.search(r'(你们|我们|咱|俺|我家|这家|那家|这里|那里|什么|怎么|为啥|为何)', m):
             return None
 
         # 纯泛称（只是问品类）→ 不拦
@@ -925,8 +927,8 @@ class ChatService:
             return {'reply': reply, 'intent': 'leave_message', 'order': None}
 
         # ============ 未知菜名检测（防幻觉，所有意图）============
-        # 'other' 走知识库兜底，不参与"未知菜名"拦截（见 SKIP_UNKNOWN_DISH_INTENTS）
-        if intent not in SKIP_UNKNOWN_DISH_INTENTS:
+        # 只有点单/询价才可能"说了个菜单里没有的菜"（见 UNKNOWN_DISH_INTENTS）
+        if intent in UNKNOWN_DISH_INTENTS:
             unknown = self._detect_unknown_dish(message)
             if unknown:
                 reply = f'菜单里没有「{unknown}」哦～ 我们的招牌是牛肉泡馍、羊肉泡馍、优质羊肉泡馍，还有凉皮、糖蒜、冰峰汽水。想吃哪种？'
@@ -1279,8 +1281,8 @@ class ChatService:
             return
 
         # ============ 未知菜名检测（防幻觉，所有意图）============
-        # 'other' 走知识库兜底，不参与"未知菜名"拦截（见 SKIP_UNKNOWN_DISH_INTENTS）
-        if intent not in SKIP_UNKNOWN_DISH_INTENTS:
+        # 只有点单/询价才可能"说了个菜单里没有的菜"（见 UNKNOWN_DISH_INTENTS）
+        if intent in UNKNOWN_DISH_INTENTS:
             unknown = self._detect_unknown_dish(message)
             if unknown:
                 reply = f'菜单里没有「{unknown}」哦～ 我们的招牌是牛肉泡馍、羊肉泡馍、优质羊肉泡馍，还有凉皮、糖蒜、冰峰汽水。想吃哪种？'
