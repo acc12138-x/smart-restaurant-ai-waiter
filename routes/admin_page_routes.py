@@ -79,6 +79,13 @@ def dashboard():
 @admin_login_required
 def api_stats():
     return jsonify(code=0, data=admin_service.dashboard_stats())
+
+
+@admin_page_bp.route('/api/stats/weekly')
+@admin_login_required
+def api_stats_weekly():
+    """本周经营周报：自然周（周一~周日）+ 环比上周 + Top 菜品 + 自动洞察"""
+    return jsonify(code=0, data=admin_service.weekly_report())
 # ============================================
 # P2 · 订单管理
 # ============================================
@@ -739,7 +746,9 @@ def api_stats_trend():
     orders = order_repo.get_all()
     orders = [o for o in orders if o.get('status') != 'cancelled']
 
-    today = datetime.now().date()
+    # 「今天」按北京时间算（容器默认 UTC，直接用 datetime.now() 会整体错 8 小时）
+    from utils.timeutil import now as tz_now
+    today = tz_now().date()
     day_list = []
     for i in range(days - 1, -1, -1):
         d = today - timedelta(days=i)

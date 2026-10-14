@@ -55,8 +55,10 @@ class AdminService:
             pass
 
     def dashboard_stats(self):
-        from datetime import datetime
-        today = datetime.now().strftime('%Y-%m-%d')
+        # 「今日」按北京时间算（容器默认 UTC，直接用 datetime.now() 会错 8 小时，
+        # 凌晨的单子还会被算成昨天）
+        from utils.timeutil import today_str
+        today = today_str()
         all_orders = order_repo.get_all()
         today_orders = [o for o in all_orders
                         if (o.get('created_at') or '').startswith(today)]
@@ -73,6 +75,172 @@ class AdminService:
             'message_total': message_repo.count(),
             'chat_total': chat_log_repo.count(),
         }
+
+    # ---------- 周报分析 ----------
+
+    def weekly_report(self):
+        """本周经营周报（自然周，周一~周日）
+
+        内容：核心指标 + 环比上周 + 逐日明细 + Top 菜品 + 高峰时段 + 自动洞察。
+        日期口径一律走 utils.timeutil（北京时间），不受容器时区影响。
+        """
+        from datetime import timedelta
+        from collections import Counter
+        from utils.timeutil import now, parse
+
+        WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+        today = now().date()
+        this_mon = today - timedelta(days=today.weekday())
+        this_sun = this_mon + timedelta(days=6)
+        last_mon = this_mon - timedelta(days=7)
+        last_sun = last_mon + timedelta(days=6)
+
+        def in_window(rows, start, end):
+            out = []
+            for r in rows:
+                dt = parse(r.get('created_at'))
+                if dt and start <= dt.date() <= end:
+                    out.append(r)
+            return out
+
+        orders_all = [o for o in order_repo.get_all() if o.get('status') != 'cancelled']
+
+        def metrics(rows):
+            revenue = round(sum(float(o.get('total') or 0) for o in rows), 2)
+            n = len(rows)
+            return {
+                'revenue': revenue,
+                'orders': n,
+                'avg_price': round(revenue / n, 2) if n else 0.0,
+                'customers': len({o.get('uid') for o in rows if o.get('uid')}),
+            }
+
+        this_orders = in_window(orders_all, this_mon, this_sun)
+        last_orders = in_window(orders_all, last_mon, last_sun)
+        this_m = metrics(this_orders)
+        last_m = metrics(last_orders)
+
+        for m, start, end in ((this_m, this_mon, this_sun), (last_m, last_mon, last_sun)):
+            m['new_users'] = len(in_window(member_repo.get_all(), start, end))
+            m['messages'] = len(in_window(message_repo.get_all(), start, end))
+            m['chats'] = len(in_window(chat_log_repo.get_all(), start, end))
+
+        def pct(cur, prev):
+            if not prev:
+                return None if not cur else 100.0
+            return round((cur - prev) / prev * 100, 1)
+
+        delta = {k: pct(this_m[k], last_m[k])
+                 for k in ('revenue', 'orders', 'avg_price', 'customers',
+                           'new_users', 'messages', 'chats')}
+
+        # 逐日明细（周一~周日）
+        by_day = []
+        for i in range(7):
+            day = this_mon + timedelta(days=i)
+            rows = []
+            for o in this_orders:
+                dt = parse(o.get('created_at'))
+                if dt and dt.date() == day:
+                    rows.append(o)
+            by_day.append({
+                'label': WEEKDAYS[i],
+                'date': day.strftime('%Y-%m-%d'),
+                'orders': len(rows),
+                'revenue': round(sum(float(o.get('total') or 0) for o in rows), 2),
+            })
+
+        # Top 菜品（items 里带 name / qty / subtotal）
+        dish_qty = Counter()
+        dish_rev = Counter()
+        for o in this_orders:
+            for it in (o.get('items') or []):
+                name = it.get('name')
+                if not name:
+                    continue
+                dish_qty[name] += int(it.get('qty') or 0)
+                dish_rev[name] += float(it.get('subtotal') or 0)
+        top_dishes = [{'name': n, 'qty': q, 'revenue': round(dish_rev[n], 2)}
+                      for n, q in dish_qty.most_common(5)]
+
+        # 高峰时段
+        hour_cnt = Counter()
+        for o in this_orders:
+            dt = parse(o.get('created_at'))
+            if dt:
+                hour_cnt[dt.hour] += 1
+        peak = {'hour': None, 'orders': 0, 'weekday': ''}
+        if hour_cnt:
+            h, c = hour_cnt.most_common(1)[0]
+            peak = {'hour': h, 'orders': c, 'weekday': ''}
+            day_of_hour = Counter()
+            for o in this_orders:
+                dt = parse(o.get('created_at'))
+                if dt and dt.hour == h:
+                    day_of_hour[WEEKDAYS[dt.weekday()]] += 1
+            if day_of_hour:
+                peak['weekday'] = day_of_hour.most_common(1)[0][0]
+
+        return {
+            'range': {
+                'start': this_mon.strftime('%Y-%m-%d'),
+                'end': this_sun.strftime('%Y-%m-%d'),
+                'label': '%s ~ %s' % (this_mon.strftime('%m-%d'), this_sun.strftime('%m-%d')),
+                'last_label': '%s ~ %s' % (last_mon.strftime('%m-%d'), last_sun.strftime('%m-%d')),
+            },
+            'this_week': this_m,
+            'last_week': last_m,
+            'delta': delta,
+            'by_day': by_day,
+            'top_dishes': top_dishes,
+            'peak': peak,
+            'insights': self._weekly_insights(this_m, delta, by_day, top_dishes, peak),
+        }
+
+    @staticmethod
+    def _weekly_insights(this_m, delta, by_day, top_dishes, peak):
+        """把指标翻译成经营结论（纯规则，不调大模型，秒出）"""
+        if not this_m['orders']:
+            return ['本周还没有订单。等第一单进来，这里会自动生成经营分析。']
+
+        ins = []
+        r = delta.get('revenue')
+        if r is not None:
+            ins.append('本周营业额 ¥%s，环比上周%s %.1f%%。' % (
+                format(this_m['revenue'], ',.0f'), '增长' if r >= 0 else '下降', abs(r)))
+
+        busiest = max(by_day, key=lambda d: d['orders'])
+        if busiest['orders']:
+            ins.append('%s最忙：%d 单、¥%s。' % (
+                busiest['label'], busiest['orders'], format(busiest['revenue'], ',.0f')))
+
+        if peak.get('hour') is not None and peak.get('orders'):
+            ins.append('高峰时段是%s %02d:00-%02d:00（%d 单），可以据此排班备料。' % (
+                peak.get('weekday') or '本周', peak['hour'],
+                (peak['hour'] + 1) % 24, peak['orders']))
+
+        if top_dishes:
+            d = top_dishes[0]
+            ins.append('卖得最好是「%s」：%d 份、¥%s，注意保持备货。' % (
+                d['name'], d['qty'], format(d['revenue'], ',.0f')))
+            if len(top_dishes) >= 3:
+                ins.append('销量前三：%s。' % '、'.join(x['name'] for x in top_dishes[:3]))
+
+        a = delta.get('avg_price')
+        if this_m['avg_price'] and a is not None:
+            ins.append('客单价 ¥%.1f，环比%s %.1f%%。' % (
+                this_m['avg_price'], '提升' if a >= 0 else '下降', abs(a)))
+
+        if this_m['new_users']:
+            ins.append('本周新增会员 %d 人，本周共服务 %d 位顾客。' % (
+                this_m['new_users'], this_m['customers']))
+
+        if this_m['chats']:
+            ins.append('AI 店长本周接待 %d 次对话，收到 %d 条留言。' % (
+                this_m['chats'], this_m['messages']))
+
+        return ins
 
     # ---------- P2 新增：订单管理 ----------
 
