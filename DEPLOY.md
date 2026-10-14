@@ -385,6 +385,150 @@ ss -tlnp                                      # 端口占用（非 root 看不�
 
 > 注意：`admin` 用户读不了 `/root`，全局搜代码时要加 `sudo`，否则会误判"代码不在这台机器上"。
 
-## 八、下一步（可选）
+## 八、证书续期运维
+
+线上两个站点（`tsx.accggcc.online`、`agent.accggcc.online`）共用一套续期机制。**任何一个环节静默失效，到期日一到两个站点会同时因证书过期而无法访问**，而且中间不会有任何告警。这一节记录实测踩过的坑。
+
+### 8.1 现状
+
+| 项 | 值 |
+|---|---|
+| 定时任务 | `/etc/cron.d/certbot-renew`，每天 03:20 |
+| 执行方式 | `docker run --rm` 跑 `certbot/certbot` 镜像 |
+| 校验方式 | webroot（HTTP-01），两个域共用 `/opt/apps/after-sales/frontend/dist` |
+| 证书目录 | `/etc/letsencrypt/live/{tsx,agent}.accggcc.online/`，密钥类型 **ECDSA P-256** |
+| 续期窗口 | 到期前 30 天自动触发（cron 每天跑，进入窗口才真正续） |
+| 错误日志 | `/var/log/certbot-renew.log`（**只在出错时才有内容**） |
+| 到期看门狗 | `/etc/cron.d/cert-expiry-watch`，每周一 09:00 记一行到期时间 |
+
+nginx 侧靠 `location /.well-known/acme-challenge/ { root /opt/apps/after-sales/frontend/dist; }` 放行校验，**两个域的 conf 都要有这段**。
+
+### 8.2 坑一：certbot 必须 ≥ 2.0（ECDSA）
+
+线上证书是 **ECDSA P-256**，而 certbot 从 **2.0 才开始支持 ECDSA**。用 1.x 的 certbot 续期，它会把证书**静默换成 RSA**——不报错、不告警，密钥类型就悄悄变了。
+
+镜像里的 certbot 版本要和 `/etc/letsencrypt/renewal/*.conf` 里的 `version` 对齐。先确认当前证书类型：
+
+```bash
+for d in tsx.accggcc.online agent.accggcc.online; do
+  printf '%-24s ' "$d"
+  openssl x509 -in /etc/letsencrypt/live/$d/cert.pem -noout -text | grep -E 'Public Key Algorithm|NIST CURVE'
+done
+```
+
+出现 `id-ecPublicKey` 就必须用 certbot ≥ 2.0。
+
+### 8.3 坑二：Docker Hub 拉不动 → 本地自建镜像
+
+`docker pull certbot/certbot:latest` 在国内基本拉不动。阿里云 ACR 的加速地址对 `latest` 可能只命中多年前的旧缓存（实测拿到过 **4 年前的 certbot 1.22.0**），而指定版本 tag 又会回落 Docker Hub 超时。
+
+**可靠做法：用本地已有的 Python 镜像自建**（基础镜像在本地、pip 走阿里云源，全程不碰 Docker Hub）：
+
+```bash
+mkdir -p /root/certbot-image && cd /root/certbot-image
+
+cat > Dockerfile << 'EOF'
+FROM smart-restaurant-ai-waiter-app:latest
+RUN pip install --no-cache-dir "certbot==5.8.0" \
+    -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
+ENTRYPOINT ["certbot"]
+EOF
+
+docker build -t certbot/certbot:latest .
+docker tag certbot/certbot:latest certbot-local:5.8.0    # 备份标签，防 latest 被覆盖
+docker run --rm certbot/certbot --version                # 确认版本
+```
+
+`certbot==5.8.0` 这个版本号要和 renewal 配置里的 `version` 一致。打完仍叫 `certbot/certbot:latest`，**cron 一行都不用改**。
+
+镜像被误删时，两种恢复方式：
+
+```bash
+docker tag certbot-local:5.8.0 certbot/certbot:latest                  # 从备份标签还原
+cd /root/certbot-image && docker build -t certbot/certbot:latest .      # 重新构建
+```
+
+⚠️ **不要再对 `certbot/certbot` 执行 `docker pull`**，否则会把自建的新镜像盖成 Hub 上的旧版本。
+
+### 8.4 坑三：`docker image prune -a` 会把它删掉
+
+certbot 镜像**不被任何运行中的容器使用**，正好落在 `docker image prune -a` 的清理范围内——一旦被删，那条 cron 就开始每天静默失败。
+
+**清理只用不带 `-a` 的形式：**
+
+```bash
+docker image prune -f        # 只删 dangling 镜像，安全
+docker builder prune -f      # 构建缓存，安全
+```
+
+### 8.5 坑四：失败完全没有声音
+
+cron 用了 `--quiet`（**只输出错误**），而这台机器**没有 MTA**——失败信息会凭空消失。所以 cron 必须带日志重定向：
+
+```bash
+cat > /etc/cron.d/certbot-renew << 'EOF'
+20 3 * * * root docker run --rm -v /etc/letsencrypt:/etc/letsencrypt -v /var/lib/letsencrypt:/var/lib/letsencrypt -v /opt/apps/after-sales/frontend/dist:/var/www/html certbot/certbot renew --webroot -w /var/www/html --quiet >> /var/log/certbot-renew.log 2>&1 && systemctl reload nginx
+EOF
+chmod 644 /etc/cron.d/certbot-renew
+```
+
+注意 `/var/log/certbot-renew.log` **是错误日志**：平时空着 = 正常，有内容 = 出事了。**续期成功不会有任何记录**，想确认成功请看证书到期时间或看门狗日志。
+
+### 8.6 到期看门狗
+
+```bash
+cat > /etc/cron.d/cert-expiry-watch << 'EOF'
+0 9 * * 1 root echo "$(date -Is) tsx:$(echo | openssl s_client -connect tsx.accggcc.online:443 -servername tsx.accggcc.online 2>/dev/null | openssl x509 -noout -enddate) agent:$(echo | openssl s_client -connect agent.accggcc.online:443 -servername agent.accggcc.online 2>/dev/null | openssl x509 -noout -enddate)" >> /var/log/cert-expiry.log
+EOF
+chmod 644 /etc/cron.d/cert-expiry-watch
+```
+
+每周一记一行。**如果到期日期不再往后跳，就说明续期断了**——比等站点报证书错误早发现一个月。手工验证一次：
+
+```bash
+echo "$(date -Is) tsx:$(echo | openssl s_client -connect tsx.accggcc.online:443 -servername tsx.accggcc.online 2>/dev/null | openssl x509 -noout -enddate)" >> /var/log/cert-expiry.log
+cat /var/log/cert-expiry.log
+```
+
+### 8.7 排查与演练
+
+```bash
+# ① cron 守护进程活着吗（它死了两个定时任务都不会跑）
+systemctl is-active crond
+
+# ② 校验链路自检：写个文件，看公网能否取到（两个域都要通）
+mkdir -p /opt/apps/after-sales/frontend/dist/.well-known/acme-challenge
+echo selftest-ok > /opt/apps/after-sales/frontend/dist/.well-known/acme-challenge/selftest
+curl -s http://tsx.accggcc.online/.well-known/acme-challenge/selftest
+curl -s http://agent.accggcc.online/.well-known/acme-challenge/selftest
+rm -f /opt/apps/after-sales/frontend/dist/.well-known/acme-challenge/selftest
+
+# ③ 演练续期（staging 环境，不消耗配额）
+docker run --rm \
+  -v /etc/letsencrypt:/etc/letsencrypt \
+  -v /var/lib/letsencrypt:/var/lib/letsencrypt \
+  -v /var/log/letsencrypt:/var/log/letsencrypt \
+  -v /opt/apps/after-sales/frontend/dist:/var/www/html \
+  certbot/certbot renew --dry-run --webroot -w /var/www/html --no-random-sleep-on-renew
+```
+
+看到 `Congratulations, all simulated renewals succeeded` 即通过。
+
+**四个容易卡住的地方：**
+
+- 手动跑要加 `--no-random-sleep-on-renew`。不加的话 certbot 会随机睡最多 8 分钟（日志里是 `Non-interactive renewal: random delay of 100.4 seconds`），看起来像卡死。**但定时任务里要保留这个延迟**，那是 Let's Encrypt 建议的错峰行为
+- `-w` 后面写**容器内路径** `/var/www/html`（它挂载到宿主机 `/opt/apps/after-sales/frontend/dist`），不是宿主机路径
+- 报 `Another instance of Certbot is already running` 说明有别的实例（或后台任务）占着锁，等它结束再跑
+- **只跑 `--dry-run`，别手动跑正式 `renew`**——Let's Encrypt 有每周 5 次重复签发配额。例外：证书已进入到期前 30 天窗口却还没续上时，那就该立刻手工续一次
+
+### 8.8 `/etc/cron.d` 的格式要求
+
+- 文件**必须以换行符结尾**，否则可能被整个忽略
+- 权限 `644`、属主 root；Vixie cron 会**跳过任何人可写的文件**（别 `chmod 666`）
+- 行格式是 `分 时 日 月 周 用户 命令`，别漏掉用户字段
+- 命令里的 `%` 会被 cron 当作换行，需要时写成 `\%`
+- cron 的 `PATH` 只有 `/usr/bin:/bin`；用到非常规路径的工具时写绝对路径
+
+## 九、下一步（可选）
 - CI/CD 自动部署（GitHub Actions → SSH）：目前 CI 只跑 pytest，部署仍需手动 pull
 - frp 反代本机 Ollama（省 API 费）：注意 `frps` 的 `allowPorts` 需覆盖目标端口，且不能让 frp 顶掉 Nginx 的反代链路
