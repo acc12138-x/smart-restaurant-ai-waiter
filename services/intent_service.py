@@ -206,7 +206,8 @@ def classify_intent(text: str, history: str = '') -> dict:
     recommend_kw = ['推荐', '随便', '都行', '无所谓', '吃啥', '有啥',
                     '有什么', '有什么好吃', '来点', '看着办', '你选',
                     '你帮我', '你决定', '帮我选', '帮我点', '什么好吃',
-                    '招牌是啥', '特色是啥']
+                    '招牌', '招牌菜', '招牌是啥', '特色', '特色菜', '特色是啥',
+                    '拿手菜', '经典菜', '必点']
     if any(k in t for k in recommend_kw):
         return {'intent': 'recommend', 'items': []}
 

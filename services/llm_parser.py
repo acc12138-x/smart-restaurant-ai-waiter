@@ -106,7 +106,7 @@ def _build_prompt(message, history, menu_names):
         '- query_total: 问合计（"一共多少钱"）\n'
         '- query_location: 问地址位置（"在哪"、"怎么走"）\n'
         '- query_hours: 问营业时间/电话（"几点关门"）\n'
-        '- recommend: 要推荐（"有推荐吗"、"推荐个套餐"）\n'
+        '- recommend: 要推荐（"有推荐吗"、"推荐个套餐"、"招牌菜"、"特色菜"、"拿手菜"、"必点"）\n'
         '- accept_recommend: 接受上一轮的推荐（"就这个"、"就要你推荐的"、'
         '"来这个"、"就按你说的"、"这个吧"）。必须先检查【对话历史】里助手是否刚推荐过\n'
         '- reject_recommend: 拒绝上一轮推荐，要求换（"不要这个"、"换一个"、'
