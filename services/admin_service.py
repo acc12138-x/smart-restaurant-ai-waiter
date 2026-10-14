@@ -15,6 +15,11 @@ _login_fails = {}  # ip/username -> [失败时间戳]
 _LOGIN_MAX = 5       # 15 分钟内最多失败 5 次
 _LOGIN_WINDOW = 900  # 15 分钟
 
+# 周报 AI 点评缓存：week_start -> {'sig': 数据指纹, 'text': 分析, 'at': 时间戳, ...}
+# 目的：同一周、数据没变就直接复用，避免每次刷新页面都花一次 token
+_AI_ANALYSIS_CACHE = {}
+_AI_ANALYSIS_TTL = 1800  # 30 分钟
+
 
 class AdminService:
 
@@ -243,6 +248,134 @@ class AdminService:
                 this_m['chats'], this_m['messages']))
 
         return ins
+
+    # ---------- 周报 · 金牌分析师（大模型点评） ----------
+
+    @staticmethod
+    def _fmt_pct(v):
+        return '无基线' if v is None else ('%+.1f%%' % v)
+
+    def _build_analysis_prompt(self, r):
+        """把周报数据写成给「金牌分析师」的提示词"""
+        w, l, de = r['this_week'], r['last_week'], r['delta']
+
+        days = '；'.join(
+            '%s %d 单/¥%s' % (d['label'], d['orders'], format(d['revenue'], ',.0f'))
+            for d in r['by_day'])
+        dishes = '；'.join(
+            '%d) %s %d 份 ¥%s' % (i + 1, x['name'], x['qty'], format(x['revenue'], ',.0f'))
+            for i, x in enumerate(r['top_dishes'])) or '本周无销售'
+        peak = r['peak']
+        if peak.get('hour') is not None:
+            peak_txt = '%s %02d:00-%02d:00（%d 单）' % (
+                peak.get('weekday') or '本周', peak['hour'], (peak['hour'] + 1) % 24, peak['orders'])
+        else:
+            peak_txt = '数据不足'
+
+        return (
+            '你是「金牌餐饮经营分析师」，服务过上千家中小餐饮门店，'
+            '擅长从营业数据里找出问题、给出能立刻执行的建议。\n\n'
+            '【输出格式】严格用下面四段，每段以标题开头，不要有任何其它前后缀：\n'
+            '【本周总评】2-3 句。先给结论（好 / 平稳 / 偏弱），并点出最关键的一个数字。\n'
+            '【关键发现】2-3 条，每条一句话，必须引用给定数据'
+            '（例如"周三贡献了本周 68% 的营业额"）。\n'
+            '【风险提示】1-2 条，指出数据里值得警惕的地方'
+            '（例如"客单价环比下滑"、"AI 对话多但下单转化低"）。\n'
+            '【下周行动】3 条，每条都要具体到"做什么 + 做到什么程度"，能直接照做。\n\n'
+            '【硬性要求】\n'
+            '- 只依据下面的数据说话，绝不编造数据里没有的信息'
+            '（不要提天气、节假日、外卖平台、竞争对手）\n'
+            '- 引用的数字必须与给定数据一致，不要自行换算或推测\n'
+            '- 不要输出"用户：""助手："这类标签，不要自问自答\n'
+            '- 全文 300 字以内，中文，语气专业、直接，像给老板做汇报\n\n'
+            '【本周数据】\n'
+            '周期：{label}（上周为 {last_label}）\n'
+            '本周：营业额 ¥{rev}（环比 {rev_d}）、订单 {orders} 单（环比 {orders_d}）、'
+            '客单价 ¥{avg}（环比 {avg_d}）、到店顾客 {cust} 人、新增会员 {nu} 人、'
+            'AI 对话 {chats} 次、留言 {msgs} 条\n'
+            '上周：营业额 ¥{lrev}、订单 {lorders} 单、客单价 ¥{lavg}、'
+            '到店顾客 {lcust} 人、新增会员 {lnu} 人、AI 对话 {lchats} 次\n'
+            '逐日：{days}\n'
+            '销量 Top5：{dishes}\n'
+            '高峰时段：{peak}\n'
+        ).format(
+            label=r['range']['label'], last_label=r['range']['last_label'],
+            rev=format(w['revenue'], ',.0f'), rev_d=self._fmt_pct(de.get('revenue')),
+            orders=w['orders'], orders_d=self._fmt_pct(de.get('orders')),
+            avg=w['avg_price'], avg_d=self._fmt_pct(de.get('avg_price')),
+            cust=w['customers'], nu=w['new_users'], chats=w['chats'], msgs=w['messages'],
+            lrev=format(l['revenue'], ',.0f'), lorders=l['orders'], lavg=l['avg_price'],
+            lcust=l['customers'], lnu=l['new_users'], lchats=l['chats'],
+            days=days, dishes=dishes, peak=peak_txt,
+        )
+
+    @staticmethod
+    def _clean_analysis(text):
+        """清掉小模型偶尔冒出来的对话标签与 markdown 粗体"""
+        t = (text or '').strip()
+        for marker in ('用户：', '用户:', '助手：', '助手:', '\n用户', '\n助手'):
+            idx = t.find(marker)
+            if idx > 0:
+                t = t[:idx]
+        return t.replace('**', '').strip()
+
+    def weekly_ai_analysis(self, force=False):
+        """让大模型以「金牌分析师」的身份点评本周经营数据
+
+        按需调用（后台点按钮），带 30 分钟缓存：同一周且数据没变就直接复用，
+        避免每次打开页面都付一次 token。
+        """
+        from utils.timeutil import now_str
+        from utils.exceptions import BizError
+
+        r = self.weekly_report()
+        week = r['range']['start']
+        w = r['this_week']
+        sig = (w['orders'], w['revenue'], w['avg_price'], w['customers'],
+               w['new_users'], w['chats'], len(r['top_dishes']))
+
+        cached = _AI_ANALYSIS_CACHE.get(week)
+        if (not force) and cached and cached.get('sig') == sig \
+                and (time.time() - cached.get('at', 0)) < _AI_ANALYSIS_TTL:
+            return {
+                'analysis': cached['text'],
+                'generated_at': cached['generated_at'],
+                'model': cached.get('model', ''),
+                'cached': True,
+                'range': r['range'],
+            }
+
+        prompt = self._build_analysis_prompt(r)
+        try:
+            from services.settings_service import settings_service
+            model = settings_service.get('api_model') or '本地模型'
+        except Exception:
+            model = ''
+
+        text = None
+        try:
+            from utils.remote_llm import chat as llm_chat
+            text = llm_chat(prompt, temperature=0.4, max_tokens=900, timeout=45)
+        except Exception as e:
+            from utils.logger import logger
+            logger.warning('[WeeklyAI] 调用失败: ' + str(e))
+            text = None
+
+        if not text or not text.strip():
+            raise BizError('AI 分析师暂时没有响应（大模型超时或未配置），请稍后重试')
+
+        cleaned = self._clean_analysis(text)
+        _AI_ANALYSIS_CACHE[week] = {
+            'sig': sig, 'text': cleaned, 'at': time.time(),
+            'generated_at': now_str(), 'model': model,
+        }
+        return {
+            'analysis': cleaned,
+            'generated_at': now_str(),
+            'model': model,
+            'cached': False,
+            'range': r['range'],
+        }
 
     # ---------- P2 新增：订单管理 ----------
 

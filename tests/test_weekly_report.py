@@ -121,3 +121,75 @@ def test_cancelled_orders_are_excluded(rdb):
     r = admin_service.weekly_report()
     assert r['this_week']['orders'] == 1
     assert r['this_week']['revenue'] == 30.0
+
+
+# ==================== 金牌分析师（AI 点评） ====================
+
+@pytest.fixture(autouse=True)
+def _clear_ai_cache():
+    """AI 点评有 30 分钟进程内缓存，测试之间必须清掉，否则 cached 断言会飘"""
+    import services.admin_service as mod
+    mod._AI_ANALYSIS_CACHE.clear()
+    yield
+    mod._AI_ANALYSIS_CACHE.clear()
+
+
+def test_analysis_prompt_contains_persona_and_real_data(rdb):
+    from services.admin_service import admin_service
+
+    mon = _monday_19h()
+    ts = (mon + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+    _order(rdb, 'A', 'u1', 30.0, ts, [{'name': '牛肉泡馍(小份)', 'qty': 1, 'subtotal': 30.0}])
+
+    prompt = admin_service._build_analysis_prompt(admin_service.weekly_report())
+
+    assert '金牌餐饮经营分析师' in prompt
+    for seg in ('【本周总评】', '【关键发现】', '【风险提示】', '【下周行动】'):
+        assert seg in prompt
+    assert '逐日：' in prompt and '销量 Top5：' in prompt and '高峰时段：' in prompt
+    assert '牛肉泡馍(小份)' in prompt        # Top 菜品进了提示词
+    assert '¥30' in prompt                  # 真实数字进了提示词
+    assert '无基线' in prompt               # 上周为 0 时的环比占位
+
+
+def test_ai_analysis_reports_error_when_llm_unavailable(rdb, monkeypatch):
+    import utils.remote_llm as rl
+    from utils.exceptions import BizError
+    from services.admin_service import admin_service
+
+    monkeypatch.setattr(rl, 'chat', lambda *a, **k: None)
+    with pytest.raises(BizError):
+        admin_service.weekly_ai_analysis()
+
+
+def test_ai_analysis_returns_sections_and_caches(rdb, monkeypatch):
+    import utils.remote_llm as rl
+    from services.admin_service import admin_service
+
+    calls = []
+
+    def fake_chat(prompt, **kw):
+        calls.append(prompt)
+        return '【本周总评】整体平稳。\n【下周行动】1) 周三多备料。'
+
+    monkeypatch.setattr(rl, 'chat', fake_chat)
+
+    a1 = admin_service.weekly_ai_analysis()
+    assert a1['cached'] is False
+    assert '本周总评' in a1['analysis']
+    assert a1['generated_at']
+
+    a2 = admin_service.weekly_ai_analysis()             # 同周、数据没变 -> 命中缓存
+    assert a2['cached'] is True
+    assert len(calls) == 1                              # 没有第二次调用
+
+    a3 = admin_service.weekly_ai_analysis(force=True)   # 强制重算
+    assert a3['cached'] is False
+    assert len(calls) == 2
+
+
+def test_clean_analysis_strips_dialog_labels_and_bold():
+    from services.admin_service import admin_service
+
+    assert '用户：' not in admin_service._clean_analysis('【本周总评】**不错**。\n用户：你说呢？')
+    assert '**' not in admin_service._clean_analysis('【本周总评】**不错**。')

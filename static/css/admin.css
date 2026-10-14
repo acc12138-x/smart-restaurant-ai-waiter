@@ -1,4 +1,4 @@
-﻿*{box-sizing:border-box;margin:0;padding:0;}
+*{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#F4F6FA;color:#1F2937;}
 
 .admin-shell{display:flex;min-height:100vh;}
@@ -1501,4 +1501,131 @@ Write-Host "CSS 追加完成" -ForegroundColor Green
     grid-template-columns: 1fr !important;
     gap: 8px !important;
   }
+}
+
+/* ============================================
+   周报 · 金牌分析师（AI 点评）
+   ============================================ */
+.ai-card{
+  position: relative;
+  overflow: hidden;
+  margin-top: 16px;
+  padding: 18px 20px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(200,65,42,.14);
+  background: linear-gradient(135deg, #FFF9F2 0%, #FFFFFF 55%);
+  box-shadow: 0 6px 22px rgba(26,14,5,.06);
+}
+.ai-card::before{
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: linear-gradient(180deg, #C8412A, #E8A33D);
+}
+.ai-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ai-title{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #1A0E05;
+}
+.ai-badge{
+  padding: 2px 8px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #C8412A;
+  background: rgba(200,65,42,.10);
+}
+.ai-sub{
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #8A7A6D;
+}
+.ai-btn{
+  border: 0;
+  cursor: pointer;
+  padding: 9px 20px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #C8412A, #E06A3B);
+  box-shadow: 0 4px 12px rgba(200,65,42,.28);
+  transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+}
+.ai-btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(200,65,42,.34);
+}
+.ai-btn:disabled{
+  opacity: .6;
+  cursor: progress;
+  transform: none;
+  box-shadow: none;
+}
+.ai-body{ margin-top: 14px; }
+.ai-loading{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 2px;
+  font-size: 13px;
+  color: #8A7A6D;
+}
+.ai-spinner{
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(200,65,42,.20);
+  border-top-color: #C8412A;
+  animation: ai-spin .8s linear infinite;
+}
+@keyframes ai-spin{ to { transform: rotate(360deg); } }
+.ai-section{
+  margin: 12px 0;
+  padding: 2px 0 2px 13px;
+  border-left: 3px solid rgba(200,65,42,.35);
+}
+.ai-section h4{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #C8412A;
+}
+.ai-section p{
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.85;
+  color: #3A2E26;
+  white-space: pre-wrap;
+}
+.ai-foot{
+  margin-top: 10px;
+  font-size: 11px;
+  color: #A8988B;
+}
+.ai-error{
+  padding: 10px 2px;
+  font-size: 13px;
+  color: #D0453A;
+}
+@media (max-width: 640px){
+  .ai-card{ padding: 14px; }
+  .ai-head{ flex-direction: column; align-items: flex-start; }
+  .ai-btn{ width: 100%; }
+  .ai-section p{ font-size: 12.5px; }
 }

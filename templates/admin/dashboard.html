@@ -137,6 +137,22 @@
     <h3 class="chart-title">经营洞察</h3>
     <div id="wkInsights"><p class="muted">加载中…</p></div>
   </div>
+
+  <!-- ---------- 金牌分析师（AI 点评，按需生成） ---------- -->
+  <div class="ai-card">
+    <div class="ai-head">
+      <div>
+        <h3 class="ai-title">🥇 金牌分析师<span class="ai-badge">AI</span></h3>
+        <p class="ai-sub">让大模型读这周的经营数据：总评 · 关键发现 · 风险提示 · 下周行动</p>
+      </div>
+      <button type="button" class="ai-btn" id="aiBtn">生成 AI 分析</button>
+    </div>
+    <div class="ai-body" id="aiBody">
+      <p class="muted" style="font-size:13px;margin:0">
+        还没有分析结果。点右上角按钮，由 AI 金牌分析师点评本周经营情况。
+      </p>
+    </div>
+  </div>
 </div>
 
 <!-- ==================== 营业趋势 ==================== -->
@@ -570,6 +586,66 @@
       kpis.innerHTML = '<p class="muted">周报加载失败</p>';
     }
   }
+
+  // ---------- 金牌分析师：AI 点评 ----------
+  var AI_ICONS = { '本周总评': '📌', '关键发现': '🔍', '风险提示': '⚠️', '下周行动': '✅' };
+
+  function renderAnalysis(text){
+    // 按【标题】切段，渲染成带左边框的段落卡片
+    var segs = (text || '').split(/(?=【)/).filter(function(s){ return s.trim(); });
+    if (segs.length <= 1){
+      return '<div class="ai-section"><p>' + (text || '') + '</p></div>';
+    }
+    return segs.map(function(seg){
+      var m = seg.match(/^【([^】]+)】([\s\S]*)$/);
+      if (!m) return '<div class="ai-section"><p>' + seg + '</p></div>';
+      var title = m[1], body = (m[2] || '').trim();
+      return '<div class="ai-section">'
+           +   '<h4>' + (AI_ICONS[title] || '•') + ' ' + title + '</h4>'
+           +   '<p>' + body + '</p>'
+           + '</div>';
+    }).join('');
+  }
+
+  async function loadAnalysis(force){
+    var box = document.getElementById('aiBody');
+    var btn = document.getElementById('aiBtn');
+    if (!box || !btn) return;
+
+    box.innerHTML = '<div class="ai-loading"><span class="ai-spinner"></span>'
+                  + '分析师正在看这周的数据，约需 10-30 秒…</div>';
+    btn.disabled = true;
+    var orig = btn.textContent;
+    btn.textContent = '分析中…';
+    try {
+      var r = await fetch('/admin/api/stats/weekly/analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: !!force }),
+      });
+      var d = await r.json();
+      if (d.code !== 0) throw new Error(d.msg || '生成失败');
+      var dt = d.data || {};
+      box.innerHTML = renderAnalysis(dt.analysis || '')
+        + '<div class="ai-foot">'
+        +   (dt.cached ? '缓存结果 · ' : '')
+        +   (dt.generated_at || '')
+        +   (dt.model ? ' · ' + dt.model : '')
+        + '</div>';
+      btn.textContent = '重新生成';
+      btn.disabled = false;
+    } catch (e) {
+      box.innerHTML = '<div class="ai-error">⚠️ ' + (e.message || '生成失败') + '，可稍后重试</div>';
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
+  }
+
+  (function bindAnalysis(){
+    var btn = document.getElementById('aiBtn');
+    if (!btn) return;
+    btn.onclick = function(){ loadAnalysis(btn.textContent === '重新生成'); };
+  })();
 
   loadWeekly();
   loadTrend(7);

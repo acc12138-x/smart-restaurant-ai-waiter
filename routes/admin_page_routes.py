@@ -86,6 +86,21 @@ def api_stats():
 def api_stats_weekly():
     """本周经营周报：自然周（周一~周日）+ 环比上周 + Top 菜品 + 自动洞察"""
     return jsonify(code=0, data=admin_service.weekly_report())
+
+
+@admin_page_bp.route('/api/stats/weekly/analysis', methods=['POST'])
+@admin_login_required
+def api_stats_weekly_analysis():
+    """让大模型以「金牌分析师」身份点评本周经营数据
+
+    按需触发（后台点按钮），带 30 分钟缓存；body 里传 {"force": true} 可强制重算。
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        result = admin_service.weekly_ai_analysis(force=bool(data.get('force')))
+    except BizError as e:
+        return jsonify(code=1, msg=e.msg), 502
+    return jsonify(code=0, data=result)
 # ============================================
 # P2 · 订单管理
 # ============================================
