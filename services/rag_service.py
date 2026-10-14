@@ -241,10 +241,14 @@ def get_rag_chain():
 # ============ 对外接口 ============
 def chat_with_rag_stream(question: str, history: str = ''):
     """流式问答
-    三级路由：
-    1. 菜单关键词 → 快路径（10ms）
-    2. 门店专属问题 → RAG 检索
-    3. 通用问题 → 直接调 Qwen3
+
+    路由：
+    1. 菜单关键词 → 快路径（10ms，直接答菜价，不加载向量库）
+    2. 其余问题 → 检索知识库，把命中的资料一并交给模型
+       （不再用"门店关键词白名单"来决定是否检索：那会让"羊从哪来""用什么料"
+         这类问题绕过知识库，模型只能凭自己编）
+    3. 知识库为空/检索失败 → context 为空，模型凭自身知识作答
+
     带内存缓存（相同问题 10 分钟内直返）
     """
     import re
@@ -303,21 +307,20 @@ def chat_with_rag_stream(question: str, history: str = ''):
         yield reply
         return
 
-    # ============ 2. 判断是否门店专属问题 ============
-    STORE_KEYWORDS = [
-        '多少钱', '价格', '几块', '贵不贵',
-        '地址', '在哪', '位置', '怎么走', '怎么去', '交通', '地铁', '导航',
-        '几点', '营业', '关门', '开门', '打烊', '营业时间',
-        '电话', '号码', '联系',
-        '什么时候开', '创立', '开业', '哪年', '什么时候成立',
-        '老汤', '三十年', '1994', '历史', '故事', '翻新', '装修',
-    ]
-    is_store_question = any(kw in q for kw in STORE_KEYWORDS)
+    # ============ 2. 是否需要检索知识库 ============
+    # 默认检索。能走到这里的问句已经不可能是纯闲聊 —— 问候语在上游
+    # intent == 'chat' 分支就被拦下并直接返回了（chat() 与流式路径都是如此）。
+    #
+    # 历史做法是用一份 35 个门店关键词的白名单（多少钱/地址/营业时间/…）来决定是否检索，
+    # 结果"羊从哪来""用什么料""辣不辣"这类问题永远检索不到知识库，模型只能凭自己编：
+    # 知识库明写「选用宁夏滩羊」，实测却被答成「陕北现宰」。
+    SKIP_RETRIEVAL = ('谢谢', '多谢', '谢了', '好的', '好呀', '好嘞', '行吧',
+                      '可以', '嗯', '不用', '没事', '算了')
+    need_retrieval = bool(q) and q not in SKIP_RETRIEVAL
 
     # ============ 3. 组装 context ============
     context = ''
-    if is_store_question:
-        # 只有门店专属问题才加载 bge-m3 检索
+    if need_retrieval:
         t0 = time.time()
         vs = load_or_build_vectorstore()
         if vs is not None:
@@ -328,7 +331,7 @@ def chat_with_rag_stream(question: str, history: str = ''):
             except Exception:
                 context = ''
         elapsed_ms = (time.time() - t0) * 1000
-        print(f"[RAG] 门店问题检索耗时 {elapsed_ms:.0f}ms")
+        print(f"[RAG] 知识库检索耗时 {elapsed_ms:.0f}ms")
 
     # ============ 4. 调 Qwen3 生成 ============
     full_text = ''
