@@ -3,108 +3,74 @@
 {% block page_title %}数据总览{% endblock %}
 {% block content %}
 
-<!-- ==================== 经营数据 ==================== -->
+<!-- ==================== 经营概览（可视化） ==================== -->
 <div class="section-block">
-  <h2 class="block-h2">经营数据</h2>
-  <div class="kpi-grid kpi-grid-7">
-    <div class="kpi-card kpi-red">
-      <div class="kpi-icon">💰</div>
-      <div class="kpi-body">
-        <div class="kpi-label">今日营业额</div>
-        <div class="kpi-value">¥{{ ('%.2f'|format(stats.revenue_today)).rstrip('0').rstrip('.') }}</div>
+  <h2 class="block-h2">经营概览</h2>
+
+  <div class="biz-row">
+    <!-- 左：今日主数字 + 行内副指标（不再是一排卡片） -->
+    <div class="biz-hero">
+      <div class="biz-hero-label">今日营业额</div>
+      <div class="biz-hero-value">¥{{ ('%.2f'|format(stats.revenue_today)).rstrip('0').rstrip('.') }}</div>
+      <div class="biz-hero-subs">
+        <div class="biz-sub"><b>{{ stats.order_today }}</b><span>今日订单</span></div>
+        <div class="biz-sub"><b>¥{{ ('%.2f'|format(stats.avg_today)).rstrip('0').rstrip('.') }}</b><span>客单价</span></div>
+        <div class="biz-sub"><b>¥{{ ('%.2f'|format(stats.revenue_total)).rstrip('0').rstrip('.') }}</b><span>累计营业额</span></div>
+        <div class="biz-sub"><b>{{ stats.order_total }}</b><span>累计订单</span></div>
       </div>
     </div>
-    <div class="kpi-card kpi-blue">
-      <div class="kpi-icon">📋</div>
-      <div class="kpi-body">
-        <div class="kpi-label">今日订单</div>
-        <div class="kpi-value">{{ stats.order_today }}</div>
+
+    <!-- 右：近 7 天迷你柱（真正可视化的趋势） -->
+    <div class="biz-mini">
+      <div class="biz-mini-head">
+        <span>近 7 天营业额</span>
+        <span id="miniSum"></span>
       </div>
-    </div>
-    <div class="kpi-card kpi-orange">
-      <div class="kpi-icon">📈</div>
-      <div class="kpi-body">
-        <div class="kpi-label">累计营业额</div>
-        <div class="kpi-value">¥{{ ('%.2f'|format(stats.revenue_total)).rstrip('0').rstrip('.') }}</div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-purple">
-      <div class="kpi-icon">🧾</div>
-      <div class="kpi-body">
-        <div class="kpi-label">累计订单</div>
-        <div class="kpi-value">{{ stats.order_total }}</div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-green">
-      <div class="kpi-icon">👥</div>
-      <div class="kpi-body">
-        <div class="kpi-label">注册用户</div>
-        <div class="kpi-value">{{ stats.user_total }}</div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-cyan">
-      <div class="kpi-icon">🤖</div>
-      <div class="kpi-body">
-        <div class="kpi-label">AI 对话数</div>
-        <div class="kpi-value">{{ stats.chat_total }}</div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-pink">
-      <div class="kpi-icon">💬</div>
-      <div class="kpi-body">
-        <div class="kpi-label">留言</div>
-        <div class="kpi-value">{{ stats.message_total }}</div>
+      <div class="mini-bars" id="miniBars"><span class="muted" style="font-size:12px">加载中…</span></div>
+      <div class="biz-mini-foot">
+        <span><b>{{ stats.user_total }}</b> 注册用户</span>
+        <span><b>{{ stats.chat_total }}</b> AI 对话</span>
+        <span><b>{{ stats.message_total }}</b> 留言</span>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ==================== 流量数据 ==================== -->
+<!-- ==================== 流量数据（条形可视化） ==================== -->
+{% set fv = events.today.visitors %}
+{% set fp = events.today.page_view %}
+{% set fc = events.today.chat_message %}
+{% set fo = events.today.order_created %}
+{% set ft = events.total_visitors %}
+{% set fe = events.total_events %}
+{% set today_max = [fv, fp, fc, fo]|max %}
+{% set all_max = [ft, fe]|max %}
 <div class="section-block">
   <h2 class="block-h2">流量数据</h2>
-  <div class="kpi-grid kpi-grid-6">
-    <div class="kpi-card kpi-blue small">
-      <div class="kpi-icon">🚶</div>
-      <div class="kpi-body">
-        <div class="kpi-label">今日访客</div>
-        <div class="kpi-value">{{ events.today.visitors }}</div>
+  <div class="chart-card flow-card">
+    <div class="flow-group">今日</div>
+    <div class="flow-list">
+      {% for label, val in [('访客', fv), ('页面浏览', fp), ('AI 对话', fc), ('下单', fo)] %}
+      <div class="flow-row">
+        <span class="flow-label">{{ label }}</span>
+        <span class="flow-bar"><i style="width:{{ ((val / (today_max if today_max > 0 else 1)) * 100)|round(1) }}%"></i></span>
+        <b class="flow-val">{{ val }}</b>
       </div>
+      {% endfor %}
     </div>
-    <div class="kpi-card kpi-indigo small">
-      <div class="kpi-icon">📊</div>
-      <div class="kpi-body">
-        <div class="kpi-label">总访问人次</div>
-        <div class="kpi-value">{{ events.total_visitors }}</div>
+
+    <div class="flow-group">累计</div>
+    <div class="flow-list">
+      {% for label, val in [('总访问人次', ft), ('累计事件', fe)] %}
+      <div class="flow-row">
+        <span class="flow-label">{{ label }}</span>
+        <span class="flow-bar"><i class="alt" style="width:{{ ((val / (all_max if all_max > 0 else 1)) * 100)|round(1) }}%"></i></span>
+        <b class="flow-val">{{ val }}</b>
       </div>
+      {% endfor %}
     </div>
-    <div class="kpi-card kpi-cyan small">
-      <div class="kpi-icon">👁</div>
-      <div class="kpi-body">
-        <div class="kpi-label">今日页面浏览</div>
-        <div class="kpi-value">{{ events.today.page_view }}</div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-green small">
-      <div class="kpi-icon">💭</div>
-      <div class="kpi-body">
-        <div class="kpi-label">今日 AI 对话</div>
-        <div class="kpi-value">{{ events.today.chat_message }}</div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-orange small">
-      <div class="kpi-icon">🛒</div>
-      <div class="kpi-body">
-        <div class="kpi-label">今日下单</div>
-        <div class="kpi-value">{{ events.today.order_created }}</div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-purple small">
-      <div class="kpi-icon">📡</div>
-      <div class="kpi-body">
-        <div class="kpi-label">累计事件</div>
-        <div class="kpi-value">{{ events.total_events }}</div>
-      </div>
-    </div>
+
+    <p class="flow-note">条形按同组最大值等比缩放，方便横向比较</p>
   </div>
 </div>
 
@@ -647,6 +613,36 @@
     btn.onclick = function(){ loadAnalysis(btn.textContent === '重新生成'); };
   })();
 
+  // ---------- 经营概览：近 7 天迷你柱 ----------
+  async function loadMiniTrend(){
+    var box = document.getElementById('miniBars');
+    if (!box) return;
+    try {
+      var r = await fetch('/admin/api/stats/trend?days=7');
+      var d = (await r.json()).data || {};
+      var days = d.days || [], revs = d.revenue_by_day || [];
+      var max = Math.max.apply(null, revs.concat([0])) || 1;
+      var sum = revs.reduce(function(a, b){ return a + b; }, 0);
+      var sumEl = document.getElementById('miniSum');
+      if (sumEl) sumEl.textContent = '合计 ¥' + sum.toLocaleString();
+
+      box.innerHTML = days.map(function(dstr, i){
+        var v = revs[i] || 0;
+        var h = Math.max(4, Math.round(v / max * 100));
+        var isToday = (i === days.length - 1);
+        var label = isToday ? '今天' : dstr.slice(5).replace('-', '/');
+        return '<div class="mini-col' + (isToday ? ' mini-today' : '') + '"'
+             +   ' title="' + dstr + '：¥' + v + '">'
+             +   '<div class="mini-bar-wrap"><i style="height:' + h + '%"></i></div>'
+             +   '<span class="mini-day">' + label + '</span>'
+             + '</div>';
+      }).join('');
+    } catch (e) {
+      box.innerHTML = '<span class="muted" style="font-size:12px">加载失败</span>';
+    }
+  }
+
+  loadMiniTrend();
   loadWeekly();
   loadTrend(7);
 })();

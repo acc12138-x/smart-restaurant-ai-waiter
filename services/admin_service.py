@@ -71,11 +71,13 @@ class AdminService:
                         if o.get('status') != 'cancelled')
         rev_today = sum(o.get('total', 0) for o in today_orders
                         if o.get('status') != 'cancelled')
+        valid_today = [o for o in today_orders if o.get('status') != 'cancelled']
         return {
             'order_total': len(all_orders),
             'order_today': len(today_orders),
             'revenue_total': round(rev_total, 2),
             'revenue_today': round(rev_today, 2),
+            'avg_today': round(rev_today / len(valid_today), 2) if valid_today else 0.0,
             'user_total': member_repo.count(),
             'message_total': message_repo.count(),
             'chat_total': chat_log_repo.count(),

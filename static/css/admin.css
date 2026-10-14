@@ -1552,6 +1552,93 @@ Write-Host "CSS 追加完成" -ForegroundColor Green
 .kpi-grid-7 .kpi-card .kpi-value{ font-size: 19px; }
 
 /* ============================================
+   经营概览 · 可视化（主数字 + 迷你柱 + 横向条形）
+   ============================================ */
+.biz-row{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 16px;
+}
+@media (max-width: 900px){ .biz-row{ grid-template-columns: 1fr; } }
+
+.biz-hero, .biz-mini{
+  background: #fff;
+  border-radius: 14px;
+  padding: 18px 22px 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.03);
+}
+.biz-hero-label{ font-size: 12px; color: #6B7280; letter-spacing: .3px; }
+.biz-hero-value{
+  margin-top: 6px;
+  font-size: 40px; font-weight: 800; line-height: 1.1; color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+.biz-hero-subs{
+  display: flex; flex-wrap: wrap; gap: 10px 28px;
+  margin-top: 16px; padding-top: 14px; border-top: 1px dashed #EEF0F3;
+}
+.biz-sub{ display: flex; flex-direction: column; gap: 1px; }
+.biz-sub b{ font-size: 16px; font-weight: 800; color: #111827; font-variant-numeric: tabular-nums; }
+.biz-sub span{ font-size: 11.5px; color: #9CA3AF; }
+
+.biz-mini-head{
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 12px; color: #6B7280; margin-bottom: 10px;
+}
+.biz-mini-head #miniSum{ font-size: 12px; font-weight: 700; color: #C8412A; }
+.mini-bars{
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 8px; align-items: end; height: 104px;
+}
+.mini-col{ display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+.mini-bar-wrap{ flex: 1; display: flex; align-items: flex-end; }
+.mini-col i{
+  display: block; width: 100%; min-height: 4px;
+  border-radius: 6px 6px 3px 3px;
+  background: linear-gradient(180deg, #F0A58C, #C8412A);
+}
+.mini-col.mini-today i{ background: linear-gradient(180deg, #F6C56B, #E08A1E); }
+.mini-day{ margin-top: 6px; text-align: center; font-size: 10.5px; color: #9CA3AF; }
+.biz-mini-foot{
+  display: flex; flex-wrap: wrap; gap: 8px 20px;
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed #EEF0F3;
+  font-size: 11.5px; color: #9CA3AF;
+}
+.biz-mini-foot b{ font-size: 14px; font-weight: 800; color: #111827; }
+
+/* 流量数据：横向条形 */
+.flow-card{ padding: 18px 22px 14px; }
+.flow-group{
+  font-size: 11.5px; font-weight: 700; color: #9CA3AF;
+  letter-spacing: .6px; margin: 4px 0 10px;
+}
+.flow-list{ display: flex; flex-direction: column; gap: 11px; }
+.flow-row{
+  display: grid; grid-template-columns: 92px minmax(0, 1fr) 52px;
+  align-items: center; gap: 12px;
+}
+.flow-label{ font-size: 12.5px; color: #4B5563; }
+.flow-bar{ height: 10px; border-radius: 100px; background: #F3F4F6; overflow: hidden; }
+.flow-bar i{
+  display: block; height: 100%; border-radius: 100px;
+  background: linear-gradient(90deg, #3B82F6, #06B6D4);
+  transition: width .4s ease;
+}
+.flow-bar i.alt{ background: linear-gradient(90deg, #8B5CF6, #6366F1); }
+.flow-val{
+  text-align: right; font-size: 14px; font-weight: 800; color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+.flow-note{ margin: 14px 0 0; font-size: 11px; color: #9CA3AF; }
+
+@media (max-width: 640px){
+  .biz-hero, .biz-mini{ padding: 16px; }
+  .biz-hero-value{ font-size: 32px; }
+  .flow-row{ grid-template-columns: 76px minmax(0, 1fr) 44px; gap: 8px; }
+  .flow-label{ font-size: 12px; }
+}
+
+/* ============================================
    周报 · 金牌分析师（AI 点评）
    ============================================ */
 .ai-card{
