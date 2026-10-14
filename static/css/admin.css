@@ -1504,6 +1504,26 @@ Write-Host "CSS 追加完成" -ForegroundColor Green
 }
 
 /* ============================================
+   布局微调 · KPI 行与下方卡片的纵向呼吸感
+   ============================================ */
+/* 原来 .kpi-grid 只有内部 gap、没有下边距，指标行会紧贴下面的卡片 */
+.kpi-grid{ margin-bottom: 22px; }
+.kpi-grid:last-child{ margin-bottom: 0; }
+
+/* 经营数据是 7 张卡：收窄最小宽度，宽屏下排成一行，避免第 7 张孤零零占一行 */
+.kpi-grid-7{ grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); }
+
+/* 周报区块：标题只保留 chart-head 那一条分隔线（原先 h2 自己也有一条，两条叠一起） */
+#weeklyReport .chart-head{ margin-bottom: 18px; }
+#weeklyReport .block-h2{ margin: 0; padding-bottom: 0; border-bottom: none; }
+#weeklyReport .chart-row{ margin-bottom: 22px; }
+
+@media (max-width: 640px){
+  .kpi-grid{ margin-bottom: 16px; }
+  #weeklyReport .chart-head{ margin-bottom: 14px; }
+}
+
+/* ============================================
    周报 · 金牌分析师（AI 点评）
    ============================================ */
 .ai-card{

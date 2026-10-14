@@ -6,7 +6,7 @@
 <!-- ==================== 经营数据 ==================== -->
 <div class="section-block">
   <h2 class="block-h2">经营数据</h2>
-  <div class="kpi-grid">
+  <div class="kpi-grid kpi-grid-7">
     <div class="kpi-card kpi-red">
       <div class="kpi-icon">💰</div>
       <div class="kpi-body">
@@ -109,9 +109,9 @@
 </div>
 
 <!-- ==================== 本周经营周报 ==================== -->
-<div class="section-block">
+<div class="section-block" id="weeklyReport">
   <div class="chart-head">
-    <h2 class="block-h2" style="margin:0">本周经营周报<span class="muted" id="wkRange"
+    <h2 class="block-h2">本周经营周报<span class="muted" id="wkRange"
       style="font-size:13px;font-weight:400;margin-left:8px"></span></h2>
     <div class="chart-tabs">
       <span class="muted" style="font-size:12px">自然周（周一~周日）· 对比上周</span>
@@ -515,8 +515,8 @@
          + (up ? '▲' : '▼') + ' ' + Math.abs(v).toFixed(1) + '%</span>';
   }
 
-  function wkCard(icon, label, value, delta, cur){
-    return '<div class="kpi-card kpi-blue small">'
+  function wkCard(icon, label, value, delta, cur, color){
+    return '<div class="kpi-card ' + (color || 'kpi-blue') + ' small">'
          +   '<div class="kpi-icon">' + icon + '</div>'
          +   '<div class="kpi-body">'
          +     '<div class="kpi-label">' + label + '</div>'
@@ -537,12 +537,12 @@
         '（' + (rg.label || '') + '，上周 ' + (rg.last_label || '') + '）';
 
       kpis.innerHTML =
-          wkCard('💰', '本周营业额', '¥' + (w.revenue || 0).toLocaleString(), de.revenue, w.revenue)
-        + wkCard('🧾', '订单数', w.orders || 0, de.orders, w.orders)
-        + wkCard('🧮', '客单价', '¥' + (w.avg_price || 0), de.avg_price, w.avg_price)
-        + wkCard('👥', '到店顾客', w.customers || 0, de.customers, w.customers)
-        + wkCard('🆕', '新增会员', w.new_users || 0, de.new_users, w.new_users)
-        + wkCard('🤖', 'AI 对话', w.chats || 0, de.chats, w.chats);
+          wkCard('💰', '本周营业额', '¥' + (w.revenue || 0).toLocaleString(), de.revenue, w.revenue, 'kpi-orange')
+        + wkCard('🧾', '订单数', w.orders || 0, de.orders, w.orders, 'kpi-blue')
+        + wkCard('🧮', '客单价', '¥' + (w.avg_price || 0), de.avg_price, w.avg_price, 'kpi-purple')
+        + wkCard('👥', '到店顾客', w.customers || 0, de.customers, w.customers, 'kpi-green')
+        + wkCard('🆕', '新增会员', w.new_users || 0, de.new_users, w.new_users, 'kpi-cyan')
+        + wkCard('🤖', 'AI 对话', w.chats || 0, de.chats, w.chats, 'kpi-indigo');
 
       var dl = d.top_dishes || [];
       document.getElementById('wkDishes').innerHTML = dl.length
