@@ -46,12 +46,32 @@
       </div>
     </div>
 
-    <div class="settings-row local-only" id="ollamaEmbedRow">
+    <div class="settings-row" id="embedProviderRow">
+      <label class="settings-label">Embedding 方式</label>
+      <div class="settings-input">
+        <select name="embed_provider" id="embedProvider">
+          <option value="local">本地 Ollama（bge-m3）</option>
+          <option value="remote">远程 API（text-embedding-v3）</option>
+        </select>
+        <p class="settings-hint">RAG 检索用。切换后请到 <a href="/admin/kb" style="color:#3B82F6;">知识库页</a> 点「保存并重建」</p>
+      </div>
+    </div>
+
+    <div class="settings-row" id="ollamaEmbedRow">
       <label class="settings-label">Ollama 嵌入模型</label>
       <div class="settings-input">
         <input type="text" name="ollama_embed_model" id="ollamaEmbed"
                placeholder="bge-m3" maxlength="80">
-        <p class="settings-hint">RAG 检索用。改动后请到 <a href="/admin/kb" style="color:#3B82F6;">知识库页</a> 点「保存并重建」重建向量库，否则检索会报错</p>
+        <p class="settings-hint">本地模式使用</p>
+      </div>
+    </div>
+
+    <div class="settings-row" id="remoteEmbedRow">
+      <label class="settings-label">远程 Embedding 模型</label>
+      <div class="settings-input">
+        <input type="text" name="embed_model" id="embedModel"
+               placeholder="text-embedding-v3" maxlength="80">
+        <p class="settings-hint">阿里云 DashScope: text-embedding-v3（1024 维，和 bge-m3 兼容）</p>
       </div>
     </div>
 
@@ -213,6 +233,16 @@
   var maskedApiKey = '';
   var maskedWebhook = '';
 
+  function toggleEmbedFields(){
+    var p = document.getElementById('embedProvider');
+    if (!p) return;
+    var isRemote = p.value === 'remote';
+    var oll = document.getElementById('ollamaEmbedRow');
+    var rem = document.getElementById('remoteEmbedRow');
+    if (oll) oll.style.display = isRemote ? 'none' : '';
+    if (rem) rem.style.display = isRemote ? '' : 'none';
+  }
+
   function toggleLlmFields(){
     var isRemote = llmProvider.value === 'remote';
     var remotes = document.querySelectorAll('.remote-only');
@@ -221,6 +251,8 @@
     for (var j = 0; j < locals.length; j++) locals[j].style.display = isRemote ? 'none' : '';
   }
   llmProvider.addEventListener('change', toggleLlmFields);
+  var epEl = document.getElementById('embedProvider');
+  if (epEl) epEl.addEventListener('change', toggleEmbedFields);
 
   function setCheckbox(name, checked){
     var el = form.querySelector('input[name="' + name + '"]');
@@ -253,6 +285,10 @@
       setInput('api_model', cfg.api_model);
       setInput('ollama_model', cfg.ollama_model);
       setInput('ollama_embed_model', cfg.ollama_embed_model);
+      setInput('embed_model', cfg.embed_model);
+      var ep = document.getElementById('embedProvider');
+      if (ep) ep.value = cfg.embed_provider || 'local';
+      toggleEmbedFields();
 
       setInput('shop_name', cfg.shop_name);
       setInput('shop_address', cfg.shop_address);
@@ -296,6 +332,8 @@
       api_model: form.querySelector('[name="api_model"]').value.trim(),
       ollama_model: form.querySelector('[name="ollama_model"]').value.trim(),
       ollama_embed_model: form.querySelector('[name="ollama_embed_model"]').value.trim(),
+      embed_provider: (document.getElementById('embedProvider') || {}).value || 'local',
+      embed_model: (form.querySelector('[name="embed_model"]') || {}).value || '',
       shop_name: form.querySelector('[name="shop_name"]').value.trim(),
       shop_address: form.querySelector('[name="shop_address"]').value.trim(),
       shop_phone: form.querySelector('[name="shop_phone"]').value.trim(),

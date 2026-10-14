@@ -66,6 +66,29 @@ def get_llm():
     return _llm
 
 
+class RemoteEmbeddings:
+    """调用远程 OpenAI 兼容 embedding API（如阿里云 DashScope text-embedding-v3）
+    实现 LangChain Embeddings 协议：embed_documents / embed_query
+    """
+    def __init__(self, api_key, base_url, model):
+        from openai import OpenAI
+        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=30)
+        self.model = model
+        self.batch_size = 20  # DashScope 单次最多 25
+
+    def embed_documents(self, texts):
+        result = []
+        for i in range(0, len(texts), self.batch_size):
+            batch = texts[i:i + self.batch_size]
+            r = self.client.embeddings.create(model=self.model, input=batch)
+            result.extend([d.embedding for d in r.data])
+        return result
+
+    def embed_query(self, text):
+        r = self.client.embeddings.create(model=self.model, input=[text])
+        return r.data[0].embedding
+
+
 def _get_embed_model_name():
     """运行时读 embed 模型名，支持后台热更新"""
     try:
@@ -77,13 +100,40 @@ def _get_embed_model_name():
 
 def get_embeddings():
     global _embeddings
-    if _embeddings is None:
-        model_name = _get_embed_model_name()
-        logger.info(f"[RAG] 连接 Ollama 嵌入模型 {model_name} @ {OLLAMA_HOST} ...")
-        _embeddings = OllamaEmbeddings(
-            model=model_name,
-            base_url=OLLAMA_HOST,
-        )
+    if _embeddings is not None:
+        return _embeddings
+
+    # 判断走远程还是本地
+    provider = 'local'
+    try:
+        from services.settings_service import settings_service
+        provider = settings_service.get('embed_provider') or 'local'
+    except Exception:
+        pass
+
+    if provider == 'remote':
+        try:
+            from services.settings_service import settings_service
+            api_key = settings_service.get('api_key') or ''
+            base_url = settings_service.get('api_base_url') or \
+                       'https://dashscope.aliyuncs.com/compatible-mode/v1'
+            model = settings_service.get('embed_model') or 'text-embedding-v3'
+            if api_key:
+                logger.info(f"[RAG] 连接远程嵌入模型 {model} @ {base_url}")
+                _embeddings = RemoteEmbeddings(api_key, base_url, model)
+                return _embeddings
+            else:
+                logger.warning('[RAG] embed_provider=remote 但 api_key 为空，降级本地')
+        except Exception as e:
+            logger.warning(f'[RAG] 远程 embedding 初始化失败，降级本地: {e}')
+
+    # 本地 Ollama
+    model_name = _get_embed_model_name()
+    logger.info(f"[RAG] 连接 Ollama 嵌入模型 {model_name} @ {OLLAMA_HOST} ...")
+    _embeddings = OllamaEmbeddings(
+        model=model_name,
+        base_url=OLLAMA_HOST,
+    )
     return _embeddings
 
 

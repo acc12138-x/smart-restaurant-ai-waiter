@@ -21,6 +21,8 @@ DEFAULTS = {
     'api_model':          'qwen3.7-plus',
     'ollama_model':       'modelscope.cn/Qwen/Qwen3-4B-GGUF:latest',
     'ollama_embed_model': 'bge-m3',
+    'embed_provider':     'local',       # 'local' | 'remote'
+    'embed_model':        'text-embedding-v3',
 
     # 门店
     'shop_name':    '同盛祥西安泡馍老店',
