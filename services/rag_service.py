@@ -1,5 +1,6 @@
 # rag_service.py
 import os
+import gc
 import shutil
 import requests
 import json as _json
@@ -346,26 +347,77 @@ def chat_plain(question: str) -> str:
         return f"出错了：{e}"
 
 
+def _release_vectorstore():
+    """释放 Chroma 的进程级句柄，返回是否成功删掉了集合。
+
+    只把 _vectorstore 置为 None 是不够的：chromadb 内部会按 persist_directory
+    缓存 System（内含 SQLite 连接），句柄一直开着。此时删掉 vector_store 里的
+    文件再重建，SQLite 会返回扩展码 1032（SQLITE_READONLY_DBMOVED）：
+    "attempt to write a readonly database"。
+
+    正确顺序是：先用 API 删掉集合 → 清掉 chromadb 的进程级缓存 → 最后才（可选）动文件。
+    """
+    global _vectorstore
+    vs, _vectorstore = _vectorstore, None
+
+    deleted = False
+    if vs is not None and hasattr(vs, 'delete_collection'):
+        try:
+            vs.delete_collection()
+            deleted = True
+            print('[RAG] 已删除旧集合')
+        except Exception as e:
+            print(f'[RAG] 删除集合失败: {e}')
+
+    # 清掉按路径缓存的 System（含 SQLite 连接）；不同 chromadb 版本路径不同，逐个试
+    for mod_name in ('chromadb.api.shared_system_client', 'chromadb.api.client'):
+        try:
+            mod = __import__(mod_name, fromlist=['SharedSystemClient'])
+            ssc = getattr(mod, 'SharedSystemClient', None)
+            if ssc is not None and hasattr(ssc, 'clear_system_cache'):
+                ssc.clear_system_cache()
+                print('[RAG] 已清理 Chroma 进程级缓存')
+                break
+        except Exception:
+            continue
+
+    gc.collect()
+    return deleted
+
+
+def _clear_vector_dir():
+    """清空 vector_store 目录内容（必须在句柄释放之后调用）"""
+    if not os.path.exists(VECTOR_DIR):
+        return
+    for item in os.listdir(VECTOR_DIR):
+        path = os.path.join(VECTOR_DIR, item)
+        try:
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                os.remove(path)
+        except Exception as e:
+            print(f'[RAG] 清理 {path} 失败（忽略）: {e}')
+
+
 def rebuild_knowledge_base():
-    """重建知识库（不删目录，避免 Docker 资源占用）"""
-    global _vectorstore, _rag_chain, _embeddings
+    """重建知识库（不删目录，避免 Docker 资源占用）
+
+    顺序很重要：先释放旧的集合与句柄，再考虑清理文件，最后重建。
+    反过来做（先删文件）会在 SQLite 层面报 (code: 1032)。
+    """
+    global _rag_chain, _embeddings
 
     # 1. 释放当前实例（含 embed，确保配置变更后重新加载）
-    _vectorstore = None
+    deleted = _release_vectorstore()
     _rag_chain = None
     _embeddings = None
 
-    # 2. 尝试清空 vector_store 目录内容（不删目录本身）
-    if os.path.exists(VECTOR_DIR):
-        for item in os.listdir(VECTOR_DIR):
-            path = os.path.join(VECTOR_DIR, item)
-            try:
-                if os.path.isdir(path):
-                    shutil.rmtree(path, ignore_errors=True)
-                else:
-                    os.remove(path)
-            except Exception as e:
-                print(f"[RAG] 清理 {path} 失败（忽略）: {e}")
+    # 2. 集合删掉了就不必再删文件——少一步文件系统操作，也就绕开了 DBMOVED。
+    #    只有删集合失败时才用清空目录兜底。
+    if not deleted:
+        print('[RAG] 删集合未成功，改为清空 vector_store 目录')
+        _clear_vector_dir()
 
     # 3. 重新构建
     return _build_vectorstore()
