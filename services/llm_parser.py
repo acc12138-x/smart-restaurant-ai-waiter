@@ -109,6 +109,9 @@ def _build_prompt(message, history, menu_names):
         '- query_order_status: 问自己这一单做到哪了/催单（"我的菜好了吗"、"还要等多久"、'
         '"催一下"、"上菜了吗"、"什么时候能好"、"订单到哪了"）。'
         '注意："我刚刚点了一份…"这类过去时叙述也归这里，绝不要当成新下单。\n'
+        '- repeat_last_order: 照上一次的再来一份（"老规矩"、"照旧"、"老样子"、'
+        '"还那样"、"和上次一样"、"按上次的来"）。items 留空即可，'
+        '系统会自己去查这个用户最近一单的菜。**不要**当成 place_order。\n'
         '- recommend: 要推荐（"有推荐吗"、"推荐个套餐"、"招牌菜"、"特色菜"、"拿手菜"、"必点"）\n'
         '- accept_recommend: 接受上一轮的推荐（"就这个"、"就要你推荐的"、'
         '"来这个"、"就按你说的"、"这个吧"）。必须先检查【对话历史】里助手是否刚推荐过\n'
@@ -238,7 +241,7 @@ def _pack_result(parsed, menu_names, message, source):
 
 VALID_ACTIONS = {'place_order', 'cancel_order', 'cancel_all', 'modify_order',
                  'query_menu', 'query_total', 'query_location', 'query_hours',
-                 'query_order_status',
+                 'query_order_status', 'repeat_last_order',
                  'recommend', 'accept_recommend', 'reject_recommend',
                  'leave_message',
                  'chat', 'other'}

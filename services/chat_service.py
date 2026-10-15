@@ -32,14 +32,24 @@ class ChatService:
     FOLLOWUP_WORDS = ['呢', '那个', '这个', '多少', '一份', '一个', '两份', '两个', '三份', '来点', '再要']
     ORDER_WORDS = ['我要', '来一', '来两', '来三', '点一', '点两', '点三', '要一', '要两', '要三', '给我']
 
+    # 这些意图主要由规则层负责（LLM 的 action 列表里没有或不可靠）
+    RULE_ONLY_INTENTS = ('repeat_last_order', 'query_order_status')
+
     def _get_intent_result(self, message, history_text=''):
         """优先 LLM 语义理解，失败/关闭降级到规则。
-        例外：accept_recommend / reject_recommend 这类强规则词直接走规则，
-        避免 LLM 把"就这个"误判为 place_order。"""
-        # 1) 先跑规则，命中 accept/reject/leave_message → 直接用（不放给 LLM）
+
+        **规则优先**（不放给 LLM）的例外：
+        - accept_recommend / reject_recommend：防 LLM 把"就这个"误判成 place_order
+        - leave_message：留言是明确动作
+        - repeat_last_order：老规矩/照旧。踩过坑 —— LLM 的 action 列表里没有这个意图，
+          不短路就会被"降级"成 place_order 空项，再回一句"请问您想点什么"。
+        """
+        # 1) 先跑规则
+        rule_result = None
         try:
             rule_result = intent_service.classify_intent(message, history=history_text)
-            if rule_result.get('intent') in ('accept_recommend', 'reject_recommend', 'leave_message'):
+            if rule_result.get('intent') in ('accept_recommend', 'reject_recommend',
+                                             'leave_message', 'repeat_last_order'):
                 logger.info('[路径] 规则命中 ' + rule_result['intent'])
                 return rule_result
         except Exception:
@@ -54,6 +64,13 @@ class ChatService:
                 r = llm_parse(message, history=history_text)
                 _dt = (_t.time() - _t0) * 1000
                 if r and r.get('intent'):
+                    # 规则命中了"规则专用意图"而 LLM 只说 other → 信任规则。
+                    # 模型不认识新意图时，功能不该静默失效（这坑踩过两次了）。
+                    if r.get('intent') == 'other' and rule_result \
+                            and rule_result.get('intent') in self.RULE_ONLY_INTENTS:
+                        logger.info('[路径] LLM=other，规则命中 %s，采用规则'
+                                    % rule_result['intent'])
+                        return rule_result
                     logger.info(f'[路径] LLM ({_dt:.0f}ms) intent={r.get("intent")}')
                     return r
                 else:
@@ -62,7 +79,7 @@ class ChatService:
                 logger.info('[路径] LLM 已关闭，走规则')
         except Exception as e:
             logger.warning(f'LLM parser 异常，降级规则: {e}')
-        return intent_service.classify_intent(message, history=history_text)
+        return rule_result or intent_service.classify_intent(message, history=history_text)
 
     def _clean(self, text: str) -> str:
         if not text:

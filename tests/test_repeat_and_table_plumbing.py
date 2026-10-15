@@ -187,3 +187,76 @@ def test_resolve_uses_chinese_numeral_table(tmp_path, monkeypatch):
 
     assert chat_service._resolve_table_no('老规矩送到一号桌', '外带', 'repeat_last_order') \
         == ('01', None)
+
+
+# ==================== 规则优先：LLM 不认识新意图，不能把功能吃掉 ====================
+
+def test_repeat_short_circuits_llm(monkeypatch):
+    """线上踩到的那次：规则认出了『老规矩』，却被送去问 LLM，
+    而 LLM 的 action 列表里没有这个意图 → 回 place_order 空项 →
+    用户收到『请问您想点什么？』。现在规则直接短路，根本不会问模型。"""
+    from services import llm_parser
+    from services.chat_service import chat_service
+
+    monkeypatch.setattr(llm_parser, 'is_enabled', lambda: True)
+    called = []
+    monkeypatch.setattr(
+        llm_parser, 'parse',
+        lambda *a, **k: called.append(1) or {'intent': 'place_order', 'items': []})
+
+    r = chat_service._get_intent_result('老规矩送到一号桌', '')
+    assert r['intent'] == 'repeat_last_order'
+    assert not called, '规则命中就不该再问 LLM'
+
+
+def test_status_question_beats_llm_other(monkeypatch):
+    """LLM 回 other 而规则认出催单 → 采用规则，否则又掉回知识库自由发挥"""
+    from services import llm_parser
+    from services.chat_service import chat_service
+
+    monkeypatch.setattr(llm_parser, 'is_enabled', lambda: True)
+    monkeypatch.setattr(
+        llm_parser, 'parse',
+        lambda *a, **k: {'intent': 'other', 'items': [], 'source': 'test'})
+
+    assert chat_service._get_intent_result('我的菜好了吗', '')['intent'] == \
+        'query_order_status'
+
+
+def test_llm_still_wins_for_normal_cases(monkeypatch):
+    """别把 LLM 主路径搞废：正常情况仍然听模型的"""
+    from services import llm_parser
+    from services.chat_service import chat_service
+
+    monkeypatch.setattr(llm_parser, 'is_enabled', lambda: True)
+    monkeypatch.setattr(
+        llm_parser, 'parse',
+        lambda *a, **k: {'intent': 'recommend', 'items': [], 'source': 'test'})
+
+    assert chat_service._get_intent_result('你们家有什么拿手的', '')['intent'] == 'recommend'
+
+
+def test_llm_still_wins_for_place_order(monkeypatch):
+    """规则没命中时，模型说什么就是什么"""
+    from services import llm_parser
+    from services.chat_service import chat_service
+
+    monkeypatch.setattr(llm_parser, 'is_enabled', lambda: True)
+    monkeypatch.setattr(
+        llm_parser, 'parse',
+        lambda *a, **k: {'intent': 'place_order',
+                         'items': [{'name': '羊肉泡馍', 'qty': 2}], 'source': 'test'})
+
+    r = chat_service._get_intent_result('随便来点什么吧', '')
+    assert r['intent'] == 'place_order'
+    assert r['items'][0]['qty'] == 2
+
+
+def test_repeat_order_reaches_llm_prompt_and_whitelist():
+    """提示词与 VALID_ACTIONS 都要有，否则模型即使想表达也会被强制成 other"""
+    from services import llm_parser
+
+    assert 'repeat_last_order' in llm_parser.VALID_ACTIONS
+    prompt = llm_parser._build_prompt('老规矩', '', ['羊肉泡馍', '冰峰汽水'])
+    assert 'repeat_last_order' in prompt
+    assert '老规矩' in prompt
