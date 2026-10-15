@@ -122,7 +122,9 @@ def _build_prompt(message, history, menu_names):
         '【items 格式】\n'
         '[{"dish": "菜单上的完整菜名", "size": "大份|小份|", "qty": 数字}]\n\n'
         '【规则】\n'
-        '1. dish 必须是菜单里存在的完整菜名，不要编造\n'
+        '1. dish 必须是菜单里存在的完整菜名，不要编造。'
+        '用户写了错别字或方言叫法（如"羊肉跑馍""冰锋汽水"）时，'
+        '按最接近的菜单菜名填写，不要因为写错就放弃\n'
         '2. qty 省略时默认 1，最大 50\n'
         '3. size 只对"牛肉泡馍"填大份/小份，其他菜留空\n'
         '4. cancel_order 时把要取消的菜名填 target\n'
@@ -132,7 +134,11 @@ def _build_prompt(message, history, menu_names):
         '【上下文理解】\n'
         '- "X的"/"就要X"/"来X吧"/"要X" 这类省略句：参考【对话历史】里 AI 最近一次反问的选项\n'
         '- "还要个"/"再来个"/"再要一份"：从历史里找最近一次下单/提到的菜名\n'
-        '- "好的"/"嗯"/"行"/"可以"/"OK"：判断上文——AI 上一条是推荐具体菜品 → 按推荐下单；是反问 → 结合更早的上下文；只是闲聊 → action=chat\n'
+        '- "好的"/"嗯"/"行"/"可以"/"OK"/"要"：判断上文——'
+        'AI 上一条**推荐了具体菜品** → action=accept_recommend（items 留空，'
+        '系统会从历史里取那道菜）；是反问 → 结合更早的上下文；'
+        '确实只是闲聊 → action=chat。'
+        '**千万不要把"接受了推荐"的确认词当成 chat**\n'
         '- "就这个"/"就要"/"来这个"/"就按你说的"/"这个吧"：如果助手上一条推荐了具体菜品 → action=accept_recommend\n'
         '- "换一个"/"不要这个"/"推荐别的"：如果助手上一条推荐过 → action=reject_recommend\n'
         '- "X小份"/"X大份"但菜单里没有对应规格（例如"羊肉泡馍小份"但菜单只有"羊肉泡馍"）：直接返回主菜名\n'
@@ -185,11 +191,27 @@ def _normalize_items(items, menu_names):
                 if dish == m or dish in m or m in dish:
                     if matched is None or len(m) > len(matched):
                         matched = m
-            if matched:
-                dish = matched
-            else:
+            if not matched:
+                # 错别字容错：模型可能返回"羊肉跑馍"这类近似写法，按相似度兜一层
+                try:
+                    from difflib import SequenceMatcher
+                    best, best_score = None, 0.0
+                    for m2 in menu_names:
+                        if abs(len(m2) - len(dish)) > 2:
+                            continue
+                        score = SequenceMatcher(None, dish, m2).ratio()
+                        if score > best_score:
+                            best, best_score = m2, score
+                    if best and best_score >= 0.7:
+                        matched = best
+                        logger.info('[LLM] 菜名容错: %s -> %s' % (dish, matched))
+                except Exception:
+                    pass
+            if not matched:
                 logger.warning('[LLM] 菜名不在菜单: ' + dish)
                 continue
+            # 注意：赋值必须放在容错之后 —— 放在前面的话模糊命中的结果丢不回来
+            dish = matched
         try:
             qty = int(it.get('qty', 1))
         except (ValueError, TypeError):

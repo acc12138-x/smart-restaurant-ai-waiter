@@ -75,3 +75,11 @@ chat_log_repo = SqliteRepository(
     id_field='id',
     auto_id=True,
 )
+
+# 对话记忆（表在 v3.8 就建好了，但一直没人用 —— 结果会话全在内存里，
+# 多 worker 之间不共享，"AI 推荐 → 用户说可以"会丢上下文）
+chat_session_repo = SqliteRepository(
+    'chat_sessions',
+    id_field='id',
+    auto_id=True,
+)

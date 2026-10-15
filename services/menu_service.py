@@ -53,9 +53,11 @@ class MenuService:
         import re
         raw = name.strip()
 
-        # 只去掉开头的量词，不动菜品名里的"小份/大份"
-        cleaned = re.sub(r'^[一二三四五六七八九十百千0-9]+份', '', raw).strip()
-        cleaned = re.sub(r'^[一二三四五六七八九十百千0-9]+个', '', cleaned).strip()
+        # 去掉开头的动作词与量词（"来碗羊肉跑馍""我要一份羊肉泡馍"），
+        # 但不动菜品名里的"小份/大份"
+        cleaned = re.sub(r'^(给我|我要|我想|来|要|点|加|拿|上|买|整)+', '', raw).strip()
+        cleaned = re.sub(r'^[一二三四五六七八九十百千两0-9]+\s*[份个碗杯瓶盘]', '', cleaned).strip()
+        cleaned = re.sub(r'^(份|碗|杯|瓶|盘|个)+', '', cleaned).strip()
         if not cleaned:
             cleaned = raw
 
@@ -75,6 +77,25 @@ class MenuService:
         if matches:
             matches.sort(key=lambda x: -x[0])
             return matches[0][1]
+
+        # 3. 错别字容错（"羊肉跑馍" → "羊肉泡馍"、"冰锋汽水" → "冰峰汽水"）
+        #    用户手打菜名难免打错；下单最终都会走到这里，兜住它比让用户重说一遍好。
+        #    长度差超过 2 的直接跳过，避免把问句误配成菜名。
+        try:
+            from difflib import SequenceMatcher
+            best_dish, best_score = None, 0.0
+            for dish in flat:
+                simple = dish['name'].split('(')[0].split('（')[0].strip()
+                for cand in {dish['name'], simple}:
+                    if len(cand) < 2 or abs(len(cand) - len(cleaned)) > 2:
+                        continue
+                    score = SequenceMatcher(None, cleaned, cand).ratio()
+                    if score > best_score:
+                        best_dish, best_score = dish, score
+            if best_dish is not None and best_score >= 0.7:
+                return best_dish
+        except Exception:
+            pass
 
         return None
 

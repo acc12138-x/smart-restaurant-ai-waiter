@@ -780,6 +780,26 @@ class ChatService:
                 simple = simplify(dish['name'])
                 if len(simple) >= 2 and simple in content:
                     return dish['name']
+
+        # ========== 第三步：AI 具体推荐的那道菜 ==========
+        # 用户回"可以/好的/小份"时，菜名只出现在**助手**消息里（用户消息里没有）。
+        # 但助手也可能在列整份菜单，所以只在"只提到 1-2 道菜"时才认，
+        # 这样既接住了"AI 推荐 → 用户同意"，又不会被菜单枚举带偏。
+        asst_msgs = [item for item in history[:-1] if item.get('role') != 'user']
+        if asst_msgs:
+            last = asst_msgs[-1].get('content', '') or ''
+            hits = [d['name'] for d in sorted_dishes if d['name'] in last]
+            if not hits:
+                for d in sorted_dishes:
+                    simple = simplify(d['name'])
+                    if len(simple) >= 2 and simple in last:
+                        hits.append(d['name'])
+            uniq = []
+            for h in hits:
+                if simplify(h) not in [simplify(u) for u in uniq]:
+                    uniq.append(h)
+            if 0 < len(uniq) <= 2:
+                return uniq[0]
         return None
 
     def _is_order_intent_weak(self, message: str) -> bool:
@@ -1063,6 +1083,13 @@ class ChatService:
         # ============ 接受推荐（"就这个"）============
         if intent == 'accept_recommend':
             last = session_service.get_last_recommend(uid)
+            if not last or not last.get('items'):
+                # 兜底：推荐记录丢了（worker 切换 / 超过 5 分钟）时，
+                # 从对话历史里找 AI 刚刚具体推荐的那道菜，别把已经答应的单子丢掉
+                dish = self._find_last_dish_in_history(uid)
+                if dish:
+                    last = {'text': '', 'items': [{'name': dish, 'qty': 1}]}
+                    logger.info('[Accept] 从历史兜底解析出推荐菜: ' + dish)
             if not last or not last.get('items'):
                 reply = '好的！那您具体想吃哪道菜？直接说菜名就行～'
                 session_service.add(uid, 'assistant', reply)
@@ -1430,6 +1457,13 @@ class ChatService:
         # ============ 接受推荐（"就这个"）============
         if intent == 'accept_recommend':
             last = session_service.get_last_recommend(uid)
+            if not last or not last.get('items'):
+                # 兜底：推荐记录丢了（worker 切换 / 超过 5 分钟）时，
+                # 从对话历史里找 AI 刚刚具体推荐的那道菜，别把已经答应的单子丢掉
+                dish = self._find_last_dish_in_history(uid)
+                if dish:
+                    last = {'text': '', 'items': [{'name': dish, 'qty': 1}]}
+                    logger.info('[Accept] 从历史兜底解析出推荐菜: ' + dish)
             if not last or not last.get('items'):
                 reply = '好的！那您具体想吃哪道菜？直接说菜名就行～'
                 session_service.add(uid, 'assistant', reply)

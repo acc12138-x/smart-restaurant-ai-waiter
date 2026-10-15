@@ -22,6 +22,66 @@ INTENTS = ['query_menu', 'query_location', 'query_hours', 'place_order',
 # 中文数字 → 阿拉伯数字
 _CN_NUM = {'一':1,'两':2,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'百':100}
 
+# 确认词：含义取决于上一轮 AI 说了什么（推荐了具体菜 → 接受推荐；否则算闲聊）
+CONFIRM_WORDS = ('可以', '可以了', '可以的', '可以啊', '可以呀', '行', '行吧',
+                 '好', '好的', '好呀', '好嘞', '嗯', '嗯嗯', 'OK', 'ok', '要')
+
+# 容错比对前先剥掉的数量词/动作词/语气词
+_STRIP_FOR_DISH = re.compile(
+    r'(我要|我想|给我|来|点|要|买|加|拿|上|份|碗|杯|瓶|盘|个|一|两|二|三|四|五|六|七|八|九|十'
+    r'|\d|的|了|吧|呢|吗|啊|呀|哦|嘛)')
+
+
+def _last_assistant_recommended(history):
+    """历史里助手的最后一条是否推荐了具体菜品
+
+    format_history() 的格式是「用户：…\\n助手：…」，取最后一条助手发言来判断。
+    """
+    if not history:
+        return False
+    try:
+        from services.menu_service import menu_service
+        names = []
+        for d in menu_service.get_flat():
+            names.append(d['name'])
+            simple = d['name'].split('(')[0].split('（')[0].strip()
+            if len(simple) >= 2:
+                names.append(simple)
+        lines = [l.strip() for l in str(history).splitlines() if l.strip()]
+        for line in reversed(lines):
+            if line.startswith(('助手', 'AI', '小同', '店长')):
+                return any(n in line for n in names)
+        return any(n in str(history) for n in names)
+    except Exception:
+        return False
+
+
+def _fuzzy_dish(text, threshold=0.7):
+    """错别字容错："羊肉跑馍" → "羊肉泡馍"、"冰锋汽水" → "冰峰汽水"
+
+    大模型本身能做到，但规则层是降级路径，不能因为它退化成"看不懂"。
+    长度差超过 2 的直接跳过，避免"你们家羊从哪来"这类问句被误配成菜名。
+    """
+    try:
+        from difflib import SequenceMatcher
+        from services.menu_service import menu_service
+        t = _STRIP_FOR_DISH.sub('', text or '').strip()
+        if len(t) < 2:
+            return None
+        best, best_score = None, 0.0
+        for dish in menu_service.get_flat():
+            simple = dish['name'].split('(')[0].split('（')[0].strip()
+            for cand in {dish['name'], simple}:
+                if len(cand) < 2 or abs(len(cand) - len(t)) > 2:
+                    continue
+                score = SequenceMatcher(None, t, cand).ratio()
+                if score > best_score:
+                    best, best_score = dish['name'], score
+        return best if best_score >= threshold else None
+    except Exception:
+        return None
+
+
 def _parse_cn_number(s):
     """解析 '一/两/十/二十/十五/100' 等"""
     s = (s or '').strip()
@@ -93,6 +153,16 @@ def classify_intent(text: str, history: str = '') -> dict:
             t = t[len(g):].strip()
             break
     if not t:
+        return {'intent': 'chat', 'items': []}
+
+    # ============ 确认词（上下文相关，必须早于其它关键词）============
+    # "可以""好的""行"到底是闲聊还是接受推荐，取决于上一轮 AI 说了什么：
+    # 上一条推荐了具体菜 → 接受推荐（下单）；否则才算闲聊。
+    # 实测踩过：AI 推荐"优质羊肉泡馍" → 用户回"可以" → 被当成闲聊，回了
+    # "好嘞！那要吃点啥？"，把已经答应的单子丢了。
+    if t in CONFIRM_WORDS:
+        if _last_assistant_recommended(history):
+            return {'intent': 'accept_recommend', 'items': []}
         return {'intent': 'chat', 'items': []}
 
     # 精确单字/短语：只说"取消"/"退"也算
@@ -186,6 +256,14 @@ def classify_intent(text: str, history: str = '') -> dict:
             if nm in t or (len(simple) >= 2 and simple in t):
                 hit_dishes.append(nm)
 
+        fuzzy_hit = False
+        if not hit_dishes:
+            # 错别字容错："来碗羊肉跑馍" → 羊肉泡馍（大模型强项，规则层降级时也不能丢）
+            guess = _fuzzy_dish(t)
+            if guess:
+                hit_dishes = [guess]
+                fuzzy_hit = True
+
         if hit_dishes:
             if any(w in t for w in _PRICE_Q):
                 return {'intent': 'query_menu', 'items': []}
@@ -193,7 +271,9 @@ def classify_intent(text: str, history: str = '') -> dict:
                 return {'intent': 'query_menu', 'items': []}
             if any(w in t for w in _TASTE_Q):
                 return {'intent': 'query_menu', 'items': []}
-            if any(w in t for w in _ORDER_V):
+            # 模糊命中的说明用户是把菜名写错了，按裸菜名处理 → 直接下单；
+            # 否则"羊肉跑馍"会因为没写"来/要"而落到 other
+            if fuzzy_hit or any(w in t for w in _ORDER_V):
                 return {'intent': 'place_order', 'items': []}
     except Exception:
         pass

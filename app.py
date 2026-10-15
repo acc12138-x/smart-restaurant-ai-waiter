@@ -79,6 +79,38 @@ def _mark_start():
     request._tsx_start = time()
 
 
+DEVICE_COOKIE = 'tsx_dev'
+
+
+@app.before_request
+def _ensure_device_id():
+    """给每个浏览器种一个设备号
+
+    未登录顾客的对话记忆以前全挂在 'anon' 这一个 key 上 —— 所有人共用一段记忆，
+    A 的上下文会串到 B，B 说"可以"甚至可能接掉 A 的推荐。这里按设备隔离。
+    只是会话标识，不含身份信息，不需要签名。
+    """
+    from flask import g
+    dev = (request.cookies.get(DEVICE_COOKIE) or '').strip()
+    if not dev or len(dev) > 64:
+        import uuid
+        dev = uuid.uuid4().hex
+        g.device_id_new = True
+    g.device_id = dev
+
+
+@app.after_request
+def _set_device_cookie(response):
+    from flask import g
+    if getattr(g, 'device_id_new', False) and getattr(g, 'device_id', None):
+        response.set_cookie(
+            DEVICE_COOKIE, g.device_id, max_age=365 * 24 * 3600,
+            httponly=True, samesite='Lax',
+            secure=request.is_secure,
+        )
+    return response
+
+
 @app.after_request
 def _log_slow(response):
     from time import time
