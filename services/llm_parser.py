@@ -106,6 +106,9 @@ def _build_prompt(message, history, menu_names):
         '- query_total: 问合计（"一共多少钱"）\n'
         '- query_location: 问地址位置（"在哪"、"怎么走"）\n'
         '- query_hours: 问营业时间/电话（"几点关门"）\n'
+        '- query_order_status: 问自己这一单做到哪了/催单（"我的菜好了吗"、"还要等多久"、'
+        '"催一下"、"上菜了吗"、"什么时候能好"、"订单到哪了"）。'
+        '注意："我刚刚点了一份…"这类过去时叙述也归这里，绝不要当成新下单。\n'
         '- recommend: 要推荐（"有推荐吗"、"推荐个套餐"、"招牌菜"、"特色菜"、"拿手菜"、"必点"）\n'
         '- accept_recommend: 接受上一轮的推荐（"就这个"、"就要你推荐的"、'
         '"来这个"、"就按你说的"、"这个吧"）。必须先检查【对话历史】里助手是否刚推荐过\n'
@@ -114,7 +117,8 @@ def _build_prompt(message, history, menu_names):
         '- leave_message: 想给老店留言（"我要留言"、"给老店留句话"、"反馈一下"、'
         '"投诉"、"建议"）。留言内容填 reply_hint。\n'
         '- chat: 打招呼闲聊（"你好"、"谢谢"）\n'
-        '- other: 其他（纯标点、纯 emoji、看不懂）\n\n'
+        '- other: 其他门店问题（支付方式、发票、停车、wifi、儿童椅等，交给知识库回答）'
+        '以及纯标点、纯 emoji、看不懂\n\n'
         '【items 格式】\n'
         '[{"dish": "菜单上的完整菜名", "size": "大份|小份|", "qty": 数字}]\n\n'
         '【规则】\n'
@@ -212,6 +216,7 @@ def _pack_result(parsed, menu_names, message, source):
 
 VALID_ACTIONS = {'place_order', 'cancel_order', 'cancel_all', 'modify_order',
                  'query_menu', 'query_total', 'query_location', 'query_hours',
+                 'query_order_status',
                  'recommend', 'accept_recommend', 'reject_recommend',
                  'leave_message',
                  'chat', 'other'}

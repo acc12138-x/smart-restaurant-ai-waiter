@@ -4,9 +4,17 @@ import re
 
 Qwen3 加载要 12 秒，且和 bge-m3 抢显存。
 菜单/营业/地址/点菜这几类用规则完全够用，不用大模型。
+
+设计原则（踩坑之后总结）：
+1. 关键词要"窄"——裸的「可以」「来点」「有什么」「给我」会把别的意图吞掉，
+   例如"可以用支付宝吗"被判成闲聊、"来点凉皮"被判成要推荐。
+2. 含完整菜名时先按菜名细分（问价 / 问口味 / 有无 / 下单），比通用关键词准。
+3. 催单和"过去时叙述"要单独识别——前者不该交给模型编等待时间，
+   后者（"我刚刚点了一份泡馍"）绝不能当成新下单。
 """
 
-INTENTS = ['query_menu', 'query_location', 'query_hours', 'place_order', 'chat', 'other']
+INTENTS = ['query_menu', 'query_location', 'query_hours', 'place_order',
+           'query_order_status', 'chat', 'other']
 
 
 
@@ -68,9 +76,14 @@ def classify_intent(text: str, history: str = '') -> dict:
     # "牛肉泡馍好吃吗" "羊肉泡馍辣不辣"
     if t.endswith(('吗', '呢', '嘛')) or '吗？' in t or '吗?' in t:
         if any(w in t for w in ('好吃', '辣', '咸', '甜', '酸', '淡',
-                                '怎么样', '如何', '推荐', '能不能',
-                                '可以', '适合', '难吃', '味道')):
+                                '怎么样', '如何', '推荐',
+                                '适合', '难吃', '味道')):
             return {'intent': 'query_menu', 'items': []}
+        # 门店杂问（"可以开发票吗""能打包吗""支持支付宝吗"）→ other，交给知识库。
+        # 既不能当闲聊（chat_kw 里的裸"可以"曾把它们回成"你好！我是金牌店长…"），
+        # 也不能被"打包"之类的下单词吞掉。
+        if any(w in t for w in ('可以', '能不能', '能', '能否', '支持', '允许')):
+            return {'intent': 'other', 'items': []}
 
     # ============ 剥离招呼词后继续 ============
     GREET_PREFIX = ['你好', '您好', '嗨', '哈喽', 'hi', 'Hi', 'HI',
@@ -110,6 +123,22 @@ def classify_intent(text: str, history: str = '') -> dict:
                                      '几块', '几元', '钱', '哪个', '哪个')):
             return {'intent': 'place_order', 'items': []}
 
+    # ============ 催单 / 查订单进度 ============
+    # 真实门店最高频的问题之一。以前没有这个意图，"我的菜好了吗""还要等多久"
+    # 会落到 other 交给模型自由发挥，于是编出等待时间；现在按订单真实状态回答。
+    status_kw = ['好了吗', '好没好', '好了没', '做好了', '做好没', '上菜', '上桌',
+                 '到哪了', '到哪儿了', '什么时候好', '还要多久', '等多久', '多久能',
+                 '几分钟', '催', '快点', '怎么还没', '还没好', '进度', '订单状态',
+                 '我的单', '我的订单', '我的菜', '几点能', '能吃上', '什么时候能好']
+    # 过去时叙述（"我刚刚点了一份泡馍"）绝不能当成新下单 —— 那会重复下单
+    past_kw = ['刚刚', '刚才', '已经', '之前', '前面', '早就', '上次']
+    if not any(w in t for w in ('取消', '退单', '退掉', '不想要')):
+        if any(k in t for k in status_kw):
+            return {'intent': 'query_order_status', 'items': []}
+        if any(w in t for w in past_kw) and any(
+                v in t for v in ('点', '要', '下单', '下过', '买', '订', '叫')):
+            return {'intent': 'query_order_status', 'items': []}
+
     # 取消订单（必须放在点菜之前，因为"取消订单XX菜"里会含菜名）
     cancel_kw = ['取消订单', '订单取消', '取消刚刚', '取消刚才',
                  '刚刚订单', '刚才订单', '刚下的单', '刚下的订单',
@@ -128,6 +157,46 @@ def classify_intent(text: str, history: str = '') -> dict:
                                          '能不能取消', '可以取消吗',
                                          '能取消吗', '怎么退')):
                 return {'intent': 'cancel_order', 'items': []}
+
+    # ============ 留言 ============
+    # 必须放在"点菜关键词"和"含菜名细分"之前：
+    # 否则"我要留言"会被 order_kw 的"我要"吞成下单，
+    # "我要投诉凉皮里有头发"会被含菜名规则吞成再点一份凉皮。
+    msg_kw = ['留言', '留个言', '留句话', '给老店留', '给老板留', '给店长留',
+              '反馈', '建议', '投诉', '意见']
+    if any(k in t for k in msg_kw):
+        return {'intent': 'leave_message', 'items': []}
+
+    # ============ 含完整菜名时先按菜名细分 ============
+    # 例："来点凉皮" 过去被 recommend_kw 的"来点"吞掉；"给我推荐个凉皮"被"给我"吞掉。
+    # 含菜名时意图其实很明确：问价 → query_menu，问口味/有无 → query_menu，下单 → place_order。
+    try:
+        from services.menu_service import menu_service
+        _PRICE_Q = ('多少', '几块', '几元', '价格', '什么价', '贵不贵', '怎么卖', '多钱')
+        _INQUIRY = ('有吗', '有没有', '有卖', '有木有', '看看', '查一下', '了解一下',
+                    '介绍', '是什么', '菜单', '在哪', '位置', '有')
+        _TASTE_Q = ('好吃', '辣', '咸', '甜', '酸', '淡', '怎么样', '如何',
+                    '难吃', '味道', '适合', '能不能吃', '能吃不', '腥', '膻')
+        _ORDER_V = ('来', '要', '点', '加', '拿', '上', '买', '给我', '打包', '再来')
+
+        hit_dishes = []
+        for dish in menu_service.get_flat():
+            nm = dish['name']
+            simple = nm.split('(')[0].split('（')[0].strip()
+            if nm in t or (len(simple) >= 2 and simple in t):
+                hit_dishes.append(nm)
+
+        if hit_dishes:
+            if any(w in t for w in _PRICE_Q):
+                return {'intent': 'query_menu', 'items': []}
+            if any(w in t for w in _INQUIRY):
+                return {'intent': 'query_menu', 'items': []}
+            if any(w in t for w in _TASTE_Q):
+                return {'intent': 'query_menu', 'items': []}
+            if any(w in t for w in _ORDER_V):
+                return {'intent': 'place_order', 'items': []}
+    except Exception:
+        pass
 
     # ============ 消息本身就是完整菜名 → 直接下单 ============
     # 例："优质羊肉泡馍" "冰峰汽水" "糖蒜(整头)"
@@ -163,12 +232,13 @@ def classify_intent(text: str, history: str = '') -> dict:
         return {'intent': 'place_order', 'items': []}
 
     # 4) 传统关键词（兜底）
+    #    注意：这里刻意不放裸的"给我"——"给我推荐个菜"会被它吞成下单
     order_kw = ['我要', '还要', '还要个', '再来', '再要',
                 '来一', '来两', '来三', '来份', '来个', '来份',
                 '点一', '点两', '点三', '点份', '点个',
                 '要一', '要两', '要三', '要份', '要个',
-                '给我', '打包', '下单',
-                '再要', '再来', '再点', '再加',
+                '打包', '下单',
+                '再点', '再加',
                 '添加', '加上']
     if any(k in t for k in order_kw):
         return {'intent': 'place_order', 'items': []}
@@ -179,12 +249,7 @@ def classify_intent(text: str, history: str = '') -> dict:
     if any(k in t for k in total_kw) and ('钱' in t or '元' in t or '多少' in t):
         return {'intent': 'query_total', 'items': []}
 
-    # ============ 留言（v3.9）============
-    msg_kw = ['留言', '留个言', '留句话', '给老店留', '给老板留', '给店长留',
-              '反馈', '建议', '投诉', '意见']
-    # 排除"给XX留言"其实是菜名的（极少见，简单处理）
-    if any(k in t for k in msg_kw):
-        return {'intent': 'leave_message', 'items': []}
+    # （留言判断已提前到"含菜名细分"之前，避免被点菜关键词吞掉）
 
     # ============ 接受/拒绝推荐（v3.9，放推荐之前）============
     accept_kw = ['就这个', '就要这个', '就要它', '就它', '就那个',
@@ -203,17 +268,26 @@ def classify_intent(text: str, history: str = '') -> dict:
         return {'intent': 'reject_recommend', 'items': []}
 
     # 推荐（放菜单之前，因为"推荐"要单独识别）
-    recommend_kw = ['推荐', '随便', '都行', '无所谓', '吃啥', '有啥',
-                    '有什么', '有什么好吃', '来点', '看着办', '你选',
-                    '你帮我', '你决定', '帮我选', '帮我点', '什么好吃',
-                    '招牌', '招牌菜', '招牌是啥', '特色', '特色菜', '特色是啥',
-                    '拿手菜', '经典菜', '必点']
+    # 注意：不放裸的"有什么""来点"——"有什么支付方式""来点凉皮"会被吞掉；
+    # 只保留指向"推荐"的完整说法，其余交给 other → 知识库兜底。
+    recommend_kw = ['推荐', '随便', '都行', '无所谓', '吃啥', '有啥吃',
+                    '有什么推荐', '有什么好吃', '有什么菜', '有什么特色',
+                    '有什么招牌', '有什么主食', '有什么小吃',
+                    '来点什么', '来点啥', '来点吃的', '来点主食',
+                    '看着办', '你选', '你帮我', '你决定', '帮我选', '帮我点',
+                    '什么好吃', '招牌', '招牌菜', '招牌是啥', '特色', '特色菜',
+                    '特色是啥', '拿手菜', '经典菜', '必点']
     if any(k in t for k in recommend_kw):
+        return {'intent': 'recommend', 'items': []}
+    # 极简的"有什么 / 有啥 / 有吗"（整句）也算要推荐
+    if t in ('有什么', '有啥', '有什么呢', '有啥呢', '有吗', '有什么吃的'):
         return {'intent': 'recommend', 'items': []}
 
     # 菜单/价格
-    menu_kw = ['多少钱', '价格', '几块', '多少元', '什么价', '有吗',
-               '有没有', '菜单', '好吃', '招牌']
+    # 注意：不放"有吗""有没有""好吃"——"有停车位"会被吞成菜单查询，
+    # 进而被未知菜名闸拦成"菜单里没有「有停车位」"。
+    menu_kw = ['多少钱', '价格', '几块', '多少元', '什么价', '怎么卖',
+               '贵不贵', '菜单', '菜价']
     if any(k in t for k in menu_kw):
         return {'intent': 'query_menu', 'items': []}
 
@@ -228,8 +302,11 @@ def classify_intent(text: str, history: str = '') -> dict:
         return {'intent': 'query_hours', 'items': []}
 
     # 闲聊 / 确认
+    # 注意：不放裸的"可以"——"可以用支付宝吗""可以开发票吗"会被吞成闲聊
+    if t in ('可以', '可以了', '可以的', '可以啊', '行', '好', '嗯嗯'):
+        return {'intent': 'chat', 'items': []}
     chat_kw = ['你好', '您好', '嗨', '在吗', '谢谢', '再见', '拜拜',
-               '好的', '好呀', '好嘞', '行吧', '可以', '嗯', 'OK', 'ok',
+               '好的', '好呀', '好嘞', '行吧', '嗯', 'OK', 'ok',
                '不用', '没事', '算了', '多谢', '谢了', '麻烦了']
     if any(k in t for k in chat_kw):
         return {'intent': 'chat', 'items': []}

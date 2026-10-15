@@ -116,10 +116,16 @@ class ChatService:
         if not re.match(r'^[\u4e00-\u9fff]+$', m):
             return None
 
+        # 以动词/疑问字开头的候选一定不是菜名（菜名不会以"有/能/可/要/来"开头）：
+        # "有停车位""能开发票""可以用支付宝"这类问句会被剥成这个形状。
+        if m[0] in '有能可是在要来给支请问说买吃喝看用做搞':
+            return None
+
         # 带人称/指示代词或疑问词的一定不是菜名。
-        # 这类问句常被剥成"你们家羊从哪""你们用什么羊肉"，会被误判成未知菜名，
-        # 回一句"菜单里没有「…」哦～"，永远到不了知识库。
-        if re.search(r'(你们|我们|咱|俺|我家|这家|那家|这里|那里|什么|怎么|为啥|为何)', m):
+        # 这类问句常被剥成"你们家羊从哪""可以用支付宝"「有停车位」，
+        # 会被误判成未知菜名，回一句"菜单里没有「…」哦～"，永远到不了知识库。
+        if re.search(r'(你们|我们|咱|俺|我家|这家|那家|这里|那里|什么|怎么|为啥|为何'
+                     r'|可以|能不能|能否|支持|允许|有吗|是不是)', m):
             return None
 
         # 纯泛称（只是问品类）→ 不拦
@@ -326,6 +332,49 @@ class ChatService:
                 break
 
         return found
+
+    # 订单状态的中文说明（催单时按真实状态回答，不让模型编等待时间）
+    STATUS_TEXT = {
+        'pending':   '已收到，正在等店家确认',
+        'paid':      '已确认，马上开始做',
+        'cooking':   '正在制作中，现煮要等几分钟，请稍等',
+        'done':      '已经做好了，稍后给您上桌',
+        'cancelled': '这一单已经取消了',
+    }
+
+    def _handle_order_status(self, uid=None, message=''):
+        """催单 / 查订单进度
+
+        以前这类问题没有对应意图，会落到 other 交给模型自由发挥，
+        于是编出"还要等 10 分钟"这种并不存在的承诺。现在按最近一单的真实状态回答。
+        """
+        if not uid:
+            return ('您还没登录，看不到订单进度哦～ 把订单号发我，我帮您查；'
+                    '或者扫码桌上的码直接下单。')
+        try:
+            from repositories.instances import order_repo
+            rows = order_repo.find(uid=uid) or []
+        except Exception as e:
+            logger.warning('[OrderStatus] 查询失败: ' + str(e))
+            rows = []
+        if not rows:
+            return '我这边没查到您的订单。您想吃什么？我帮您下单。'
+
+        # 优先看未取消的单；全取消了就展示最近那一单
+        active = [o for o in rows if o.get('status') != 'cancelled']
+        rows = active or rows
+        rows.sort(key=lambda o: o.get('created_at') or '', reverse=True)
+        o = rows[0]
+
+        status = o.get('status') or 'pending'
+        items = o.get('items') or []
+        names = '、'.join(
+            '%s×%d' % (it.get('name'), int(it.get('qty') or 1)) for it in items[:3]
+        ) or '—'
+        return '您这一单（%s）%s。\n订单号 %s，共 %d 件、¥%s。' % (
+            names, self.STATUS_TEXT.get(status, '处理中'),
+            o.get('id') or '', len(items), o.get('total') or 0,
+        )
 
     def _handle_recommend(self, message, uid=None):
         """推荐走 LLM：给菜单 + 用户消息 + 历史，让 AI 灵活挑菜（v3.9）"""
@@ -1133,6 +1182,12 @@ class ChatService:
             session_service.add(uid, 'assistant', reply)
             return {'reply': reply, 'intent': intent, 'order': None}
 
+        # ============ 订单进度 / 催单 ============
+        if intent == 'query_order_status':
+            reply = self._handle_order_status(uid, message)
+            session_service.add(uid, 'assistant', reply)
+            return {'reply': reply, 'intent': intent, 'order': None}
+
         # ============ 菜单快路径 ============
         from services.rag_service import chat_with_rag_stream
         import time as _t
@@ -1500,6 +1555,14 @@ class ChatService:
                 reply = '好嘞！那要吃点啥？招牌牛肉泡馍配糖蒜和冰峰最巴适，或者来份套餐更划算，我给您配上？'
             else:
                 reply = '你好！我是同盛祥的金牌店长小同 👨‍🍳 想吃啥？第一次来我推荐招牌牛肉泡馍配糖蒜+冰峰，人均 40 上下；要清淡的给您配凉皮+酸梅汤。'
+            session_service.add(uid, 'assistant', reply)
+            yield ('text', reply)
+            yield ('done', None)
+            return
+
+        # ============ 订单进度 / 催单 ============
+        if intent == 'query_order_status':
+            reply = self._handle_order_status(uid, message)
             session_service.add(uid, 'assistant', reply)
             yield ('text', reply)
             yield ('done', None)
