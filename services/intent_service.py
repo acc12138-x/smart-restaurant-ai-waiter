@@ -14,7 +14,7 @@ Qwen3 加载要 12 秒，且和 bge-m3 抢显存。
 """
 
 INTENTS = ['query_menu', 'query_location', 'query_hours', 'place_order',
-           'query_order_status', 'chat', 'other']
+           'query_order_status', 'repeat_last_order', 'chat', 'other']
 
 
 
@@ -192,6 +192,15 @@ def classify_intent(text: str, history: str = '') -> dict:
         if not any(w in t for w in ('多少', '什么', '啥', '价格',
                                      '几块', '几元', '钱', '哪个', '哪个')):
             return {'intent': 'place_order', 'items': []}
+
+    # ============ 老规矩 / 照旧（重复上一单）============
+    # "老规矩送到一号桌"这类说法很常见：菜不用重说，照上次的来，桌号另说。
+    # 必须在"含菜名细分"和未知菜名闸之前认出来，否则会被当成菜名。
+    repeat_kw = ['老规矩', '照旧', '照老样子', '老样子', '老一套', '还那样', '还是那样',
+                 '和上次一样', '跟上次一样', '和之前一样', '跟之前一样', '按上次的',
+                 '上次那个', '上次的那', '再来一份上次', '一如既往']
+    if any(k in t for k in repeat_kw):
+        return {'intent': 'repeat_last_order', 'items': []}
 
     # ============ 催单 / 查订单进度 ============
     # 真实门店最高频的问题之一。以前没有这个意图，"我的菜好了吗""还要等多久"

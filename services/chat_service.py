@@ -121,6 +121,12 @@ class ChatService:
         if m[0] in '有能可是在要来给支请问说买吃喝看用做搞':
             return None
 
+        # 含桌号/指代类表达的候选一定不是菜名 —— 这些有专门的逻辑处理。
+        # "老规矩送到一号桌"曾被整串当成菜名，回成"菜单里没有「老规矩送到一号桌」"。
+        if re.search(r'(送到|送去|端到|上到|拿到|放到|桌|台号'
+                     r'|老规矩|照旧|老样子|老一套|上次|之前|一样)', m):
+            return None
+
         # 带人称/指示代词或疑问词的一定不是菜名。
         # 这类问句常被剥成"你们家羊从哪""可以用支付宝"「有停车位」，
         # 会被误判成未知菜名，回一句"菜单里没有「…」哦～"，永远到不了知识库。
@@ -333,6 +339,58 @@ class ChatService:
 
         return found
 
+    def _handle_repeat_last_order(self, uid, table_no='外带'):
+        """「老规矩 / 照旧」= 照上一次的再下一单
+
+        菜从**库里**最近一单取（不依赖内存会话，多 worker 也对），
+        已下架的菜自动跳过；全都不在菜单里时如实说明，不硬下单。
+        返回 (回复文本, 订单对象或 None)。
+        """
+        if not uid:
+            return '照老规矩下单需要先登录哦～ 点底部「我的」→「立即登录」，我就记住您的口味了。', None
+
+        try:
+            rows = order_service.get_by_uid(uid) or []
+        except Exception as e:
+            logger.warning('[Repeat] 查询历史订单失败: ' + str(e))
+            rows = []
+        rows = [o for o in rows if o.get('status') != 'cancelled']
+        if not rows:
+            return '还没查到您上次的订单呢～ 想吃啥直接说，我帮您下。', None
+
+        rows.sort(key=lambda o: o.get('created_at') or '', reverse=True)
+        last = rows[0]
+
+        from services.menu_service import menu_service
+        items, skipped = [], []
+        for it in (last.get('items') or []):
+            name = it.get('name')
+            if not name:
+                continue
+            if menu_service.find_dish(name):
+                items.append({'name': name, 'qty': int(it.get('qty') or 1)})
+            else:
+                skipped.append(name)
+
+        if not items:
+            return ('您上次点的（%s）现在菜单上没有啦，换点别的？' %
+                    '、'.join(skipped or ['那些菜'])), None
+
+        try:
+            result = order_service.create(items, table_no=table_no, uid=uid)
+        except BizError as e:
+            return '照上次那样下单没成功：' + str(e.msg), None
+        except Exception as e:
+            logger.warning('[Repeat] 下单失败: ' + str(e))
+            return '照上次那样下单没成功，稍后再试～', None
+
+        line = '、'.join('%s×%d' % (i['name'], i['qty']) for i in items)
+        reply = '好嘞，照老规矩来：%s\n%s' % (line, order_service.format_reply(result))
+        if skipped:
+            reply += '\n（%s 现在没有，先跳过了）' % '、'.join(skipped)
+        logger.info('[Repeat] uid=%s 照上一单重下: %s' % (uid, line))
+        return reply, result['order']
+
     def _resolve_table_no(self, message, current, intent):
         """确定这一单送到哪张桌
 
@@ -533,11 +591,22 @@ class ChatService:
         if qty_err:
             return qty_err
 
+        # 改单后仍送到原来那张桌（以前这里硬编码 "外带"，一改单桌号就丢了）
+        keep_table = '外带'
+        try:
+            prev = [o for o in (order_service.get_by_uid(uid) or [])
+                    if o.get('status') != 'cancelled']
+            if prev:
+                prev.sort(key=lambda o: o.get('created_at') or '', reverse=True)
+                keep_table = prev[0].get('table_no') or '外带'
+        except Exception:
+            pass
+
         # 取消含 old_part 的最近一单（复用 cancel 逻辑）
         cancel_msg = self._handle_cancel_order(uid, old_part)
         # 下单新菜
         try:
-            result = order_service.create(new_items, table_no='外带', uid=uid)
+            result = order_service.create(new_items, table_no=keep_table, uid=uid)
             reply = order_service.format_reply(result)
             session_service.add_order(uid, result['order'])
             return f'已改单。\n原订单处理：{cancel_msg}\n新订单：{reply}'
@@ -964,6 +1033,16 @@ class ChatService:
             session_service.add(uid, 'assistant', table_reply)
             return {'reply': table_reply, 'intent': intent, 'order': None}
 
+        # ============ 老规矩 / 照旧（照上一单重下，"老规矩送到一号桌"也走这里）====
+        if intent == 'repeat_last_order':
+            reply, order = self._handle_repeat_last_order(uid, table_no)
+            session_service.add(uid, 'assistant', reply)
+            if order:
+                session_service.add_order(uid, order)
+            return {'reply': reply,
+                    'intent': 'place_order' if order else intent,
+                    'order': order}
+
         # ============ 门店 FAQ ============
         STORE_FAQ = {
             # 位置/交通
@@ -1330,6 +1409,17 @@ class ChatService:
         if table_reply:
             session_service.add(uid, 'assistant', table_reply)
             yield ('text', table_reply)
+            yield ('done', None)
+            return
+
+        # ============ 老规矩 / 照旧（照上一单重下，"老规矩送到一号桌"也走这里）====
+        if intent == 'repeat_last_order':
+            reply, order = self._handle_repeat_last_order(uid, table_no)
+            session_service.add(uid, 'assistant', reply)
+            if order:
+                session_service.add_order(uid, order)
+                yield ('meta', {'intent': 'place_order', 'order': order})
+            yield ('text', reply)
             yield ('done', None)
             return
 
