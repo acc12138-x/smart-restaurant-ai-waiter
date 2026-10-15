@@ -333,6 +333,45 @@ class ChatService:
 
         return found
 
+    def _resolve_table_no(self, message, current, intent):
+        """确定这一单送到哪张桌
+
+        优先级：**话里说的（且后台配过）** > 二维码带过来的 > 外带。
+        返回 (桌号, 错误提示)；提示非空时调用方应直接回复、不要下单。
+
+        为什么必须校验：顾客说"送到 8 号桌"而店里没有 8 号桌时，
+        菜会被送到一张不存在的桌子上 —— 当场告诉他比事后找菜强。
+        """
+        from services.table_service import table_service
+        mentioned, explicit = table_service.extract(message)
+        if not mentioned:
+            return current, None
+
+        matched = table_service.match(mentioned)
+        if matched:
+            if matched != current:
+                logger.info('[Table] 按对话里的桌号 %s（原 %s）下单' % (matched, current))
+            return matched, None
+
+        # 后台一张桌都没配过 → 没法校验，不拦顾客
+        if not table_service.has_config():
+            logger.info('[Table] 后台未配置桌码，直接采用对话里的桌号: ' + mentioned)
+            return mentioned, None
+
+        # 只是顺口提了一句（"上次在 5 号桌吃的"）且不是点单 → 不打断
+        if not (explicit or intent == 'place_order'):
+            return current, None
+
+        hint = table_service.available_hint()
+        if hint:
+            reply = ('我们店里没有「%s 号桌」哦～ 现在有 %s 号桌。\n'
+                     '也可以直接扫桌上的二维码，那样肯定不会错。' % (mentioned, hint))
+        else:
+            reply = ('我们店里没有「%s 号桌」哦～ 麻烦看一下桌上二维码上的桌号，'
+                     '或者扫一下桌上的码。' % mentioned)
+        logger.info('[Table] 对话里的桌号不存在: ' + mentioned)
+        return current, reply
+
     # 订单状态的中文说明（催单时按真实状态回答，不让模型编等待时间）
     STATUS_TEXT = {
         'pending':   '已收到，正在等店家确认',
@@ -919,6 +958,12 @@ class ChatService:
         items = result.get('items', [])
         logger.info(f"[Chat] uid={uid} 用户: {message} | 意图: {intent} | 商品: {items}")
 
+        # ============ 对话里指定的桌号（"点一份羊肉泡馍送到 1 号桌"）============
+        table_no, table_reply = self._resolve_table_no(message, table_no, intent)
+        if table_reply:
+            session_service.add(uid, 'assistant', table_reply)
+            return {'reply': table_reply, 'intent': intent, 'order': None}
+
         # ============ 门店 FAQ ============
         STORE_FAQ = {
             # 位置/交通
@@ -1279,6 +1324,14 @@ class ChatService:
         logger.info(f"[Chat-Stream] uid={uid} 用户: {message} | 意图: {intent}")
 
         yield ('meta', {'intent': intent})
+
+        # ============ 对话里指定的桌号（"点一份羊肉泡馍送到 1 号桌"）============
+        table_no, table_reply = self._resolve_table_no(message, table_no, intent)
+        if table_reply:
+            session_service.add(uid, 'assistant', table_reply)
+            yield ('text', table_reply)
+            yield ('done', None)
+            return
 
         # ============ 门店 FAQ 快路径 ============
         STORE_FAQ = {
