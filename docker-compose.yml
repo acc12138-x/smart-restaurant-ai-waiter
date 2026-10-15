@@ -19,6 +19,9 @@ services:
       - ./templates:/app/templates
       - ./static:/app/static
       - ./scripts:/app/scripts
+      # 只读挂 .git，好让 /health 能报出"当前进程实际加载的是哪个提交"
+      # （判断"拉了代码但没重启"最直接；不需要容器里装 git，只读 HEAD/refs）
+      - ./.git:/app/.git:ro
     environment:
      - OLLAMA_HOST=http://127.0.0.1:11434
      - SKIP_WARMUP=1

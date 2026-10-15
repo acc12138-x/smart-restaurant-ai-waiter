@@ -346,6 +346,33 @@ curl -I -m 8 https://tsx.你的域名/
 docker compose -f $D/docker-compose.yml up -d --build   # 只在改了 requirements.txt / Dockerfile / docker-compose.yml 时
 ```
 
+> ⚠️ **别用 `up -d` 代替 `restart` 来应用代码改动**（踩过）
+>
+> 容器已经在跑、compose 配置又没变时，`up -d` 只会打印一行 `Container tsx-app Running`，
+> **不会重启进程**。挂载的源码文件是新的，但 Python 模块早就加载进内存了，
+> 跑的还是旧代码 —— 现象是"代码明明改了、行为一点没变"，非常难查。
+>
+> - 改**应用代码**（`.py` / 模板 / CSS）：`docker compose -f $D/docker-compose.yml restart`
+> - 改过 compose 里的 `environment` / `volumes`：必须 `up -d --force-recreate`（`restart` 不重读环境变量）
+
+**怎么确认进程真的加载了新代码**
+
+```bash
+curl -s http://127.0.0.1:5000/health | python3 -m json.tool
+```
+
+```json
+"code": {
+  "commit": "fe43d0a",                          // 当前加载的提交（挂了 .git 才有，否则 unknown）
+  "process_started_at": "2026-10-14 21:05:00",  // 进程启动时间
+  "newest_source_mtime": "2026-10-14 21:30:12", // 代码文件最后修改时间
+  "stale": true,                                // ← true = 代码比进程新，跑的是旧代码
+  "hint": "代码比进程新 —— 拉了代码但没重启…"
+}
+```
+
+`stale: true` → 执行 `restart`，再访问本接口应变成 `false`。这比翻容器日志快得多。
+
 **回退**：
 
 ```bash
